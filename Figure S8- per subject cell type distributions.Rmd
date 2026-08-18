@@ -1,0 +1,345 @@
+---
+title: "Figure S8- per subject cell type distributions"
+author: "Prasida Holla"
+date: "2025-08-12"
+output:
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Clean Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# import the ex vivo object and re-clustered monocytes with pseudotime trajectoruies calculated
+```{r import exvvio seurat object susbset B cells and recluster, include=TRUE, message=TRUE}
+# import the ffll ex vivo 78k object
+temp <- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1W_oqvtGPdUlF2BcOH4AKsc80ZS2DNPCy"), path = temp, overwrite = TRUE)
+exvivo<-readRDS(file = dl$local_path)
+
+```
+
+# a. plot umapsof all 78k cells separated by subject
+```{r per subject umap, fig.align='center', fig.width= 12, fig.height= 4}
+
+Idents(exvivo)<-exvivo$phenotype
+aparacells<-WhichCells(exvivo, idents = "Aparasitemic")
+paracells<-WhichCells(exvivo, idents = "Parasitemic")
+
+
+apara_umap <- DimPlot(exvivo,  pt.size = 3.5, reduction = "ref.umap", cells = aparacells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+  mutate(class = "aparasitemic") 
+
+para_umap <- DimPlot(exvivo,  pt.size = 3.5, reduction = "ref.umap",  cells = paracells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+  mutate(class = "parasitemic") 
+
+all_umap <- bind_rows(apara_umap,
+                          para_umap) %>%
+  mutate(class = factor(class, levels = c("parasitemic", "aparasitemic")))
+
+library(ggh4x)
+strip_apara <- strip_themed(background_y = elem_list_rect(fill = c( "#58a4cb", alpha = 0.6)))
+
+strip_para <- strip_themed(background_y = elem_list_rect(fill = c( "#e41a1c", alpha = 0.6)))
+
+
+
+all_umap <- all_umap %>%
+  rownames_to_column(., "barcode")
+
+all_umap_plot_bysubj_apara <- exvivo@meta.data %>%
+  rownames_to_column(., "barcode") %>%
+  dplyr::select(c("subject_id", "barcode", "predicted.celltype.l1")) %>%
+  left_join(all_umap, by="barcode") %>%
+  mutate(subj_id = ifelse(subject_id == "kali0585", "subject 1", subject_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0618", "subject 2", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0631", "subject 4", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0626", "subject 3", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0636", "subject 5", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0647", "subject 6", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0666", "subject 7", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0593", "subject 8", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0600", "subject 9", subj_id)) %>%
+    mutate(subj_id = ifelse(subj_id == "kali0604", "subject 10", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0628", "subject 11", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0640", "subject 12", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0650", "subject 13", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0651", "subject 14", subj_id)) %>%
+  subset(class == "aparasitemic") %>%
+  ggplot(., aes(x = UMAP_1, y = UMAP_2, fill = "predicted.celltype.l1")) +
+  geom_point(pch=21, size = 1, stroke = 0.05) +
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
+  theme_bw() +
+  theme(legend.position = "none",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        legend.text = element_blank(),
+        plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+        strip.text = element_text(size = 14)) +
+  facet_grid2(rows = vars(class), cols = vars(factor(subj_id)), strip = strip_apara, independent = "all", scales = "free", space= "free")
+
+all_umap_plot_bysubj_para <- exvivo@meta.data %>%
+  rownames_to_column(., "barcode") %>%
+  dplyr::select(c("subject_id", "barcode", "predicted.celltype.l1")) %>%
+  left_join(all_umap, by="barcode") %>%
+  mutate(subj_id = ifelse(subject_id == "kali0585", "subject 1", subject_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0618", "subject 2", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0631", "subject 4", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0626", "subject 3", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0636", "subject 5", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0647", "subject 6", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0666", "subject 7", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0593", "subject 8", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0600", "subject 9", subj_id)) %>%
+    mutate(subj_id = ifelse(subj_id == "kali0604", "subject 10", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0628", "subject 11", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0640", "subject 12", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0650", "subject 13", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0651", "subject 14", subj_id)) %>%
+  subset(class == "parasitemic") %>%
+  ggplot(., aes(x = UMAP_1, y = UMAP_2, fill = "predicted.celltype.l1")) +
+  geom_point(pch=21, size = 1, stroke = 0.05) +
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
+  theme_bw() +
+  theme(legend.position = "none",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        legend.text = element_blank(),
+        plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+        strip.text = element_text(size = 14)) +
+  facet_grid2(rows = vars(class), cols = vars(factor(subj_id, levels = c("subject 8", "subject 9", "subject 10", "subject 11", "subject 12", "subject 13", "subject 14"))), strip = strip_para, independent = "all", scales = "free", space= "free")
+
+all_umap_by_subj <- plot_grid(all_umap_plot_bysubj_apara,
+                              all_umap_plot_bysubj_para,
+                              nrow = 2)
+
+all_umap_by_subj -> figure_s7a
+
+all_umap_by_subj
+```
+
+# b. Import wnn re-clustered nk and monocytes from figure 5 and show per subject distribution
+
+```{r nkmono wnn umap plots, fig.align='center', fig.width=8, fig.height=6}
+temp <- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1rgn3_aGYcAI-MNjhR-tftAbtNJ6FJRiT"), path = temp, overwrite = TRUE)
+nkmono <- readRDS(file = dl$local_path)
+
+
+# downsample
+
+table(nkmono$phenotype)
+
+Idents(nkmono) <- 'phenotype'
+cell.list.para <- WhichCells(nkmono, idents= "Parasitemic", downsample = 1503)
+cell.list.apara <- WhichCells(nkmono, idents= "Aparasitemic")
+
+cell.list <- c(cell.list.apara, cell.list.para)
+
+nkmono.downsampled <- nkmono[, cell.list]
+
+Idents(nkmono.downsampled) <- 'seurat_clusters'
+
+
+DimPlot(nkmono.downsampled, reduction = "wnn.umap", label=T, split.by = "phenotype")
+
+apara_wnn_dat <- DimPlot(nkmono.downsampled, 
+                              group.by = "ident",  
+                              pt.size = 0.5, 
+                              reduction = "wnn.umap", 
+                              cells = cell.list.apara, 
+                              alpha = 0.45, 
+                              combine = FALSE)[[1]]$data %>%
+  mutate(class = "aparasitemic") 
+
+para_wnn_dat <- DimPlot(nkmono.downsampled, 
+                             group.by = "ident", 
+                             pt.size = 0.5, 
+                             reduction = "wnn.umap", 
+                             cells = cell.list.para, 
+                             alpha = 0.45, 
+                             combine = FALSE)[[1]]$data %>%
+  mutate(class = "parasitemic") 
+
+all_wnn_dat <- bind_rows(apara_wnn_dat,
+                          para_wnn_dat) %>%
+  mutate(class = factor(class, levels = c("parasitemic", "aparasitemic"))) %>%
+  mutate(ident = case_when(
+    ident == "13" ~ "14",
+    ident == "12" ~ "13",
+     ident == "11" ~ "12",
+     ident == "10" ~ "11",
+    ident == "9" ~ "10",
+    ident == "8" ~ "9",
+    ident == "7" ~ "8",
+    ident == "6" ~ "7",
+    ident == "5" ~ "6",
+    ident == "4" ~ "5",
+    ident == "3" ~ "4",
+    ident == "2" ~ "3",
+    ident == "1" ~ "2",
+    ident == "0" ~ "1"))
+
+library(ggh4x)
+strip_apara <- strip_themed(background_y = elem_list_rect(fill = c( "#58a4cb", alpha = 0.6)))
+
+strip_para <- strip_themed(background_y = elem_list_rect(fill = c( "#e41a1c", alpha = 0.6)))
+
+
+new_colors = colorRampPalette(brewer.pal(10,"Spectral"))(length(unique(all_wnn_dat$ident)))
+
+all_wnn_dat <- all_wnn_dat %>%
+  rownames_to_column(., "barcode")
+
+all_wnnumap_plot_bysubj_apara <- nkmono.downsampled@meta.data %>%
+  rownames_to_column(., "barcode") %>%
+  dplyr::select(c("subject_id", "barcode")) %>%
+  left_join(all_wnn_dat, by="barcode") %>%
+   mutate(subj_id = ifelse(subject_id == "kali0618", "subject 1", subject_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0626", "subject 2", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0636", "subject 3", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0666", "subject 4", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0604", "subject 5", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0628", "subject 6", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0640", "subject 7", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0650", "subject 8", subj_id)) %>%
+  subset(class == "aparasitemic") %>%
+  ggplot(., aes(x = wnnUMAP_1, y = wnnUMAP_2, color = factor(ident,levels = as.character(sort(as.numeric(unique(ident))))))) +
+  geom_point(pch=21, size = 2, stroke = 0.5) +
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
+ scale_color_manual(values = new_colors) +
+  theme_bw() +
+  theme(legend.position = "none",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        plot.margin=unit(c(0.1,1,0.1,1), "null"),
+        strip.text = element_text(size = 12)) +
+  facet_grid2(rows = vars(class), cols = vars(subj_id), strip = strip_apara)
+
+all_wnnumap_plot_bysubj_para <- nkmono.downsampled@meta.data %>%
+  rownames_to_column(., "barcode") %>%
+  dplyr::select(c("subject_id", "barcode")) %>%
+  left_join(all_wnn_dat, by="barcode") %>%
+   mutate(subj_id = ifelse(subject_id == "kali0618", "subject 1", subject_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0626", "subject 2", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0636", "subject 3", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0666", "subject 4", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0604", "subject 5", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0628", "subject 6", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0640", "subject 7", subj_id)) %>%
+  mutate(subj_id = ifelse(subj_id == "kali0650", "subject 8", subj_id)) %>%
+  subset(class == "parasitemic") %>%
+  ggplot(., aes(x = wnnUMAP_1, y = wnnUMAP_2, color = factor(ident,levels = as.character(sort(as.numeric(unique(ident))))))) +
+  geom_point(pch=21, size = 2, stroke = 0.5) +
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
+ scale_color_manual(values = new_colors) +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        plot.margin=unit(c(0.1,1,0.1,1), "null"),
+        strip.text = element_text(size = 12)) +
+  facet_grid2(rows = vars(class), cols = vars(subj_id), strip = strip_para) +
+  guides(colour = guide_legend(title="cluster",
+                                 nrow = 3,
+                                 override.aes = list(size=2.5)))
+
+all_wnn_umap_by_subj <- plot_grid(all_wnnumap_plot_bysubj_apara,
+                              all_wnnumap_plot_bysubj_para,
+                              nrow = 2,
+                              rel_heights = c(0.8,1))
+
+all_wnn_umap_by_subj -> figure_s7b
+
+all_wnn_umap_by_subj
+```
+
+# assmeble figure parts
+
+```{r assemble figure, fig.align='center', fig.height= 10, fig.width= 12}
+
+figureS7 <- plot_grid(figure_s7a,
+                      figure_s7b,
+                      nrow = 2,
+                      rel_heights = c(1,1.4),
+                      rel_widths = c(1, 1.2),
+                      labels = c('a', 'b'), 
+                      align = "h",
+                      axis = "tbrl")
+
+figureS7
+```
+
+# save
+
+```{r save figure, fig.align='center', fig.height= 10, fig.width= 12}
+
+ggsave(paste0(figdir, "Figure S7 per subject umap plots for fig4 and 5.pdf"), figureS7, units = "in", height = 10, width = 12, bg = "white")
+
+ggsave(paste0(figdir, "Figure S7 per subject umap plots for fig4 and 5.png"), figureS7, units = "in", height = 10, width = 12, bg = "white", dpi = 300)
+```
+
