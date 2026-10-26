@@ -1,0 +1,152 @@
+---
+title: "Table S5- IPs across cell types (related to Figure 4e)"
+author: "Prasida Holla"
+date: "2026-03-29"
+output:
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(RColorBrewer)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(dplyr)
+library(ggplot2)
+library(scriabin)
+library(ggalluvial)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# import IP families from ALRA-run aparasitemic and parasitemic ex vivo data
+
+```{r import IP data across aparasitemic and parasitemic, include=TRUE}
+
+# aparasitemic 
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("19xTVjkCrVzVyv4xw26q-pxW-jZniC4w7"), path = temp, overwrite = TRUE)
+apara_scores <- readRDS(file = dl$local_path)
+
+# apara_scores <- readRDS("exvivo_apara_82k_filt_interaction_programs.rds") # local
+
+# parasitemic
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("10yqt75q1URY91OQorarsw0Y_OY1IMhd7"), path = temp, overwrite = TRUE)
+para_scores <- readRDS(file = dl$local_path)
+
+# para_scores <- readRDS("exvivo_para_82k_filt_interaction_programs.rds") # local
+```
+
+# create tables
+
+```{r create joint table for all IPs, include=TRUE}
+
+apara_scores_df <- apara_scores %>%
+  mutate(name = paste0(name, " aparasitemic")) %>%
+  subset(name %in% c("IP-5 aparasitemic",
+                               "IP-6 aparasitemic",
+                               "IP-9 aparasitemic",
+                               "IP-10 aparasitemic",
+                               "IP-13 aparasitemic",
+                               "IP-16 aparasitemic",
+                               "IP-19 aparasitemic")) %>%
+  dplyr::rename("IP" = "name") %>%
+  dplyr::rename("p value" = "Aparasitemic_pval") %>%
+  dplyr::rename("connectivity" = "Aparasitemic_connectivity") %>%
+  #dplyr::select(lr_pair, IP) %>%
+  mutate(class = "aparasitemic")
+
+para_scores_df <- para_scores %>%
+  mutate(name = paste0(name, " parasitemic")) %>%
+  subset(name %in% c("IP-2 parasitemic",
+                               "IP-6 parasitemic",
+                               "IP-9 parasitemic",
+                               "IP-12 parasitemic")) %>%
+  dplyr::rename("IP" = "name") %>%
+  dplyr::rename("p value" = "Parasitemic_pval") %>%
+  dplyr::rename("connectivity" = "Parasitemic_connectivity") %>%
+  #dplyr::select(lr_pair, IP) %>%
+  mutate(class = "parasitemic")
+
+
+ip_scores_all <- rbind(apara_scores_df, 
+                       para_scores_df)
+
+# look at scores (these are not cell type specific and will not be included)
+#apara_lig_m <- as.matrix(apara[["IPligands"]]@data) %>% 
+#                           t() %>%
+#                           as.data.frame() %>% 
+#                           add_column(celltype = apara$predicted.celltype.l2) %>%
+#                           add_column(class = "aparasitemic") %>% 
+#  group_by(class, celltype) %>%
+#                               summarise_if(is.numeric, mean) %>%
+#  ungroup()
+
+
+```
+
+# Save as excel sheet
+
+```{r save table S5, include=TRUE}
+
+write_xlsx(ip_scores_all, path = paste0(figdir, "Table S5 IPs in ex vivo cells.xlsx"))
+```
+

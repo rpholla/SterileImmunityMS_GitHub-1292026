@@ -1,0 +1,477 @@
+---
+title: "New Figure 4: scRNA-seq overview with 82K object"
+author: "Prasida Holla"
+date: "2026-09-21"
+output:   
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(RColorBrewer)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(dplyr)
+library(ggplot2)
+library(scriabin)
+library(ggalluvial)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# Figure 4. scRNA-seq
+
+# load data and split aparasitemic and parasitemic objects
+
+```{r download data plot umaps of all ex vivo single cell data, fig.align='center', fig.width=12, fig.height=4}
+
+#import the 82k seurat object that includes all samples integrated
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1Z1gGEfNz7R-qYXizY7Sg6mzJxJkEm6Ti"), path = temp, overwrite = TRUE)
+refmapped.all<-readRDS(file = dl$local_path)
+
+#refmapped.all <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/Non downsampled filteredcounts_SterImm_14samples_82kcells_integrated_reduced_annoted_RNA_HTO_ADT_peak045_07_2026.rds")
+
+refmapped.all$predicted.celltype.l2 = gsub("Proliferating", "prolif.", refmapped.all$predicted.celltype.l2)
+refmapped.all$predicted.celltype.l2 = gsub("intermediate", "intermed.", refmapped.all$predicted.celltype.l2)
+
+```
+
+# A: is a schematic that shows ssamples on which CITE-seq and multiome analysis was performed
+
+```{r plot ndeg_pl, fig.align='center', fig.width=3.5, fig.height=4}
+fig4apng <- readPNG("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/Clean versions 05-2025/Clean Figures/Figure 4/Figure 4a scRNA-seq and scATAC-seq study design.png")
+fig4a_gg <- ggplot() + annotation_custom(grid::rasterGrob(fig4apng,
+                                                         width=ggplot2::unit(1,"npc"),
+                                                         height=ggplot2::unit(1,"npc")),
+                                        -Inf, Inf, -Inf, Inf)
+
+fig4a_gg
+```
+
+# B: plot umaps. For this, we will downsample such that there are equal number of cells in aparasitemic and parasitemic classes
+
+```{r plot umaps of all ex vivo single cell data, fig.align='center', fig.width=10, fig.height=4.5}
+
+# downsample
+set.seed(1000)
+
+table(refmapped.all$phenotype)
+
+Idents(refmapped.all) <- 'phenotype'
+cell.list.para <- WhichCells(refmapped.all, idents= "Parasitemic", downsample = 40989)
+
+cell.list.apara <- WhichCells(refmapped.all, idents= "Aparasitemic")
+
+cell.list <- c(cell.list.apara, cell.list.para)
+
+refmapped.all.downsampled <- refmapped.all[, cell.list]
+
+Idents(refmapped.all.downsampled) <- 'seurat_clusters'
+
+
+# create a version for final figure 5a
+all.split<-SplitObject(refmapped.all.downsampled, split.by = "phenotype")
+all_para <-all.split$Parasitemic
+all_apara <-all.split$Aparasitemic
+
+#plot umap of all cells, colored by celltype
+plot_umap_allcells <- refmapped.all.downsampled %>%
+  DimPlot(.,
+          reduction = "ref.umap", 
+          group.by = "predicted.celltype.l2", 
+          label = TRUE, 
+          label.size = 3, 
+          repel = TRUE,
+          pt.size = 0.03,
+          raster = FALSE,
+          combine = FALSE)
+umap_all_cells_dat <- plot_umap_allcells[[1]]$data %>%
+  mutate(class = "all cells (82K cells, n = 14)")
+
+#Plot umap of aparasitemic
+plot_umap_apara <- all_apara %>%
+  DimPlot(.,
+          reduction = "ref.umap", 
+          group.by = "predicted.celltype.l2", 
+          label = TRUE, 
+          label.size = 0, 
+          repel = TRUE,
+          pt.size = 0.03) 
+umap_apara_dat <- plot_umap_apara[[1]]$data %>%
+  mutate(class = "aparasitemic (n=7)")
+
+#plot umap of parasitemic
+plot_umap_para <- all_para %>%
+  DimPlot(.,
+          reduction = "ref.umap",
+          group.by = "predicted.celltype.l2", 
+          label = TRUE, 
+          label.size = 0, 
+          repel = TRUE,
+          pt.size = 0.03)
+umap_para_dat <- plot_umap_para[[1]]$data %>%
+  mutate(class = "parasitemic (n=7)")
+
+all_umap_dat <- bind_rows(umap_all_cells_dat, umap_apara_dat, umap_para_dat) %>%
+  mutate(class = factor(class, levels = c("all cells (82K cells, n = 14)", "aparasitemic (n=7)", "parasitemic (n=7)")))
+
+strip <- strip_themed(background_x = elem_list_rect(fill = c("gray80", "#58a4cb", "#e41a1c", alpha = 0.6)))
+
+cells_to_label <- c("CD14 Mono", "CD16 Mono", "CD4 Naive", "CD4 TEM", "CD8 Naive", "B memory", "B naive", "pDC", "cDC2", "CD8 TEM", "NK", "gdT", "MAIT",
+                    "Treg", "NK_CD56bright")
+new_colors = colorRampPalette(brewer.pal(10,"Spectral"))(length(unique(all_umap_dat$predicted.celltype.l2)))
+find_center <- function(my_vector) my_vector[ceiling(length(my_vector)/2)]
+figure_4b <- all_umap_dat %>%
+  group_by(class, predicted.celltype.l2) %>%
+  mutate(midval_umap1_by_celltype = find_center(UMAP_1)) %>%
+  mutate(midval_umap2_by_celltype = find_center(UMAP_2)) %>%
+  mutate(cell_label = as.character(predicted.celltype.l2)) %>%
+  mutate(label = ifelse(predicted.celltype.l2 %in% cells_to_label & UMAP_1 == midval_umap1_by_celltype & class == "all cells (82K cells, n = 14)", cell_label, "")) %>%
+  ungroup() %>%
+  ggplot(., aes(x = UMAP_1, y = UMAP_2, color = predicted.celltype.l2)) +
+  geom_point(size = 0.5) +
+  scale_color_manual(values = new_colors) +
+  geom_text(aes(label = label), color = "black", size = 3) +
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
+  theme_bw() +
+  theme(legend.position = "bottom",
+        legend.margin = margin(),
+        legend.spacing.x = unit(0.05, "cm"),
+        legend.spacing.y = unit(0.05, 'cm'),
+        legend.key.size = unit(1, "lines"),
+        legend.text = element_text(size = 7),
+        plot.margin=unit(c(0.05,0.05,0.1,0.05), "null"),
+        strip.text = element_text(size = 14)) +
+  facet_grid2(cols = vars(class), strip = strip) +
+  guides(colour = guide_legend(title="cell type",
+                               nrow = 3,
+                               override.aes = list(size=2.5)))
+
+figure_4b
+```
+
+# C: Top DEG numbers across innate and adaptive celltypes from 82K object edgeR
+
+```{r get data number of DEGs across celltypes, include=TRUE}
+
+# import edgeR topDEs 
+temp<-tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1x9W2Vbnu6DBELA8PCQaVC0XCBeRRfThv"), path = temp, overwrite = TRUE)
+degs <- readRDS(file = dl$local_path)
+
+#degs <- readRDS("~/Desktop/R21 Sterile Immunity Data and Scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/SterImm_edgeR_topdiff_genes_82kobj_lmfit_w_duppcorr_pairingblock_object_Aug_2026.rds")
+```
+
+```{r plot number of DEGs across celltypes, fig.align='center', fig.width=3.5, fig.height=4}
+all_degs <- bind_rows(degs, .id="cell_type")
+sig_degs <- subset(all_degs, logFC> 2 | logFC< - 2)
+sig_degs <- subset(sig_degs, P.Value < 0.005)
+
+split(sig_degs,f=sig_degs$cell_type) -> deg_split
+
+f <- function(x) {
+  list(ndegs = nrow(x), names = names(x))
+}
+
+lapply(deg_split, f) -> r
+p <- do.call(rbind, r)
+p <- data.frame(p)%>%rownames_to_column(., "cell_type")
+p <- p[,c(1,2)]
+q <- unnest(p, ndegs)
+
+#plot by number of DEGs
+# remove dnt due to poor characterization
+q <- subset(q, cell_type %nin% c("dnT", "Platelet"))
+# Keep only those wuth > 20 genes
+q <- subset(q, ndegs>2)
+# Add adaptive and Innate ccell type annotations
+q <- q %>%
+  mutate(Immunity_arm=ifelse(cell_type %in% c("B memory", "B intermediate","B naive","CD4 TEM","CD4 TCM","CD8 Naive", "CD8 TCM", "CD8 TEM", "Treg", "Plasmablast"), "adaptive", "innate"))
+
+figure_4c <- ggplot(q, aes(x = ndegs, y = reorder(cell_type, ndegs), colour = Immunity_arm, fill = Immunity_arm)) +
+  geom_bar(stat="identity") +
+  ylab("cell type") +
+  xlab("number of DEGs") +
+  theme(axis.text.y = element_text(size=12),
+        axis.text.x = element_text(size=12),
+        axis.title.y  = element_text(size=13),
+        axis.title.x  = element_text(size=13),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "darkgrey", fill=NA, size=1),
+        plot.margin=unit(c(0.05,0.05,0.05,0.05), "null"),
+        legend.position = "top",
+        legend.key.size = unit(0.5,"line"),
+        legend.margin = margin(0, 0, 0, 0), # turned off for alignment
+        legend.justification.left = "top",
+        legend.title = element_blank())+
+  scale_fill_manual(values = c("#AE5D74", "#367A47")) +
+  scale_color_manual(values = c("#AE5D74", "#367A47")) +
+  ggpubr::grids(linetype = "dashed")
+
+figure_4c
+```
+
+# D: Top genesets enriched by CAMERA
+
+```{r import geneset enrichment results from CAMERA and edgeR and plot, include=TRUE}
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1EryRzuHF7w8zi0bGstLKdjD-C5g2kYqh"), path = temp, overwrite = TRUE)
+camera_hall<-readRDS(file = dl$local_path)
+
+#camera_hall<-readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/SterImm_edgeR_CAMERApr_Hallmark_82kobj_lmfit_w_duppcorr_pairingblock_object_Aug_2026.rds") #local
+```
+
+```{r plot camera celltype , fig.align='center', fig.width=5.5, fig.height=6}
+basetextsize <- 8
+myfont <- "sans"
+bubble_max_size <- 6
+
+
+
+camera_hall_bound_filtered <- camera_hall %>%
+  mutate(neglog10pval = -log10(PValue)) %>%
+  arrange(desc(neglog10pval)) %>%
+  dplyr::filter(FDR < 0.01) %>%
+  dplyr::filter(celltype != "dnT") %>%
+  mutate(pathway = gsub("HALLMARK_", "", pathway)) %>%
+  mutate(pathway = gsub("_", " ", pathway))
+
+fig4d_camera_celltype <- camera_hall_bound_filtered %>%
+  mutate(Direction = factor(Direction, levels = c("Up", "Down"), labels = c("up in aparasitemic", "up in parasitemic"))) %>%
+  mutate(celltype = fct_reorder(celltype, -log10(FDR))) %>%
+  ggplot(., aes(y = pathway, x = celltype, fill = Direction)) +
+  geom_point(aes(size = -log10(FDR)), shape=21, stroke = 0.25, alpha = 0.6) +
+  scale_fill_manual(values = c("#58a4cb", "#e41a1c"),
+                    guide = guide_legend(title = NULL, override.aes = list(size = 3))) +
+  scale_size_area(name = expression(-log[10]~adj.~p~value),  max_size = bubble_max_size) +
+  hrbrthemes::theme_ipsum_es(base_family = myfont, base_size = basetextsize) +
+  theme(axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        strip.background = element_blank(),
+        legend.position = "top",
+        legend.title.position = "top",
+        legend.justification = "right",
+        legend.box="vertical",
+        legend.margin=margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        plot.margin=unit(c(0.05,0.05,0.05,0.05), "null"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1))+
+  coord_cartesian(clip = 'off')
+
+fig4d_camera_celltype
+```
+
+
+
+# E: Show top interactors across cell types in aparasitemic and parasitemic subjects
+
+```{r top cell cell interactors using scriabin, include=TRUE,  fig.align='center', fig.width=6, fig.height=6}
+
+# cell cell contacts have been calculated using scriabin. Import the aparasitemic and parasitemic seurat objects with interfaction programs calcualted
+
+# aparasitemic
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1f7Ova1t28e9EV7NlOYMnn6oOC2xQkEGx"), path = temp, overwrite = TRUE)
+apara <- readRDS(file = dl$local_path)
+
+# apara <- readRDS("aparasitemic_exvivo_82k_filt_ALRA_IP.rds") # local
+
+# parasitemic
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id(""), path = temp, overwrite = TRUE)
+para <- readRDS(file = dl$local_path)
+
+
+# para <- readRDS("parasitemic_exvivo_82k_filt_ALRA_IP.rds")
+
+# summarize aparasitemic and parasitemic IPs by cell type
+# aparasitemic
+ip_by_celltype_apara <- IPCellTypeSummary(apara, group.by = "predicted.celltype.l2") %>%
+  group_by(sender) %>% top_n(n = 1, wt = additive.score) %>%
+  mutate(category = "aparasitemic") %>%
+  mutate(program = paste0(program, " ", "aparasitemic"))
+  
+
+# parasitemic
+ip_by_celltype_para <- IPCellTypeSummary(para, group.by = "predicted.celltype.l2") %>%
+  group_by(sender) %>% top_n(n = 1, wt = additive.score) %>%
+  mutate(category = "parasitemic") %>%
+  mutate(program = paste0(program, " ", "parasitemic"))
+
+
+# combine apara and para ip_by_celltype scores2
+
+ip_by_celltype_all <- rbind(ip_by_celltype_apara, ip_by_celltype_para) %>%
+  mutate(program = fct_relevel(as.factor(program), 
+                               c("IP-5 aparasitemic",
+                               "IP-6 aparasitemic",
+                               "IP-9 aparasitemic",
+                               "IP-10 aparasitemic",
+                               "IP-13 aparasitemic",
+                               "IP-16 aparasitemic",
+                               "IP-19 aparasitemic",
+                               "IP-2 parasitemic",
+                               "IP-6 parasitemic",
+                               "IP-9 parasitemic",
+                               "IP-12 parasitemic")))
+
+```
+
+# plot alluvial plots showing interactions
+
+```{r plot top cell cell interactors using, include=TRUE,  fig.align='center', fig.width=6, fig.height=6, warning=FALSE}
+# plot bubble plots showing top interactors for each group
+new_colors2 = colorRampPalette(brewer.pal(10,"Spectral"))(length(unique(ip_by_celltype_all$program))+25)
+
+# remove light yellow
+scales::show_col(new_colors2)
+
+# we will get rid of platelet programs so keep only nicely contrasting colors (total 9 programs to be included)
+
+new_colors2 <- c("#9E0142", "#E45549", "#FDAE61", "#D7EF9B",  "#77C8A4", "#3D4A40", "#E4ADC4", "#5E4FA2", "gold2", "#4A2E00", "#003366")
+
+basetextsize <- 9
+myfont <- "sans"
+
+
+addSmallLegend <- function(myPlot, pointSize = 3, textSize = 7.5, spaceLegend = 0.5){
+    myPlot +
+        guides(shape = guide_legend(override.aes = list(size = pointSize), nrow=1),
+               color = guide_legend(override.aes = list(size = pointSize), nrow=1) +
+        theme(legend.title = element_text(size = textSize), 
+              legend.text  = element_text(size = textSize),
+              legend.key.size = unit(spaceLegend, "lines")))
+        }
+
+
+plot_interactions <- ip_by_celltype_all %>%
+  as.data.frame() %>%
+    filter_all(all_vars(!. %in% 'Platelet')) %>% 
+  mutate(across(contains(c("sender", "receiver")), ~ gsub("Proliferating", "prolif.", .))) %>%
+  mutate(across(contains(c("sender", "receiver")), ~ gsub("intermediate", "intermed.", .))) %>%
+  mutate(across(contains(c("sender", "receiver")), ~ gsub("CD56bright", "CD56br.", .))) %>%
+  ggplot(.,aes(y = additive.score, axis1 = sender, axis2 = receiver)) +
+    ggalluvial::geom_alluvium(aes(fill = program), width = 1/3) +
+    geom_stratum(width = 1/3, fill = "grey", color = "grey15", alpha=0.6) +
+    geom_text(stat = "stratum", aes(label = after_stat(stratum)), check_overlap = TRUE, size = 2.9) +
+    scale_x_discrete(limits = c("sender", "receiver"), expand = c(.05, .05)) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.05))) +
+    scale_fill_manual(values=new_colors2) + 
+  facet_wrap(~category, scales="free_y") +
+    #ggtitle("ligand-receptor interactions by cell type") +
+  hrbrthemes::theme_ipsum_es(base_family = myfont, base_size = basetextsize) +
+  ylab("additive score") +
+  theme_bw() +
+  theme(axis.title.x = element_text(hjust = 0.5, size = 10),
+        axis.title.y = element_text(hjust = 0.5, size = 10),
+        axis.text.x = element_text(hjust = 0.5, size = 10),
+        axis.text.y = element_text(hjust = 0.5, size = 10),
+        plot.margin=unit(c(0.06,0.06,0.1,0.1), "null"),
+        strip.background = element_blank(),
+        legend.position = "top",
+        legend.title.position = "top",
+        legend.title = element_text(size = 7.5), 
+        legend.text  = element_text(size = 7.5),
+        legend.key.size = unit(0.5, "lines"),
+        legend.margin=margin(),
+        legend.spacing.y = unit(0.1, "cm"))  +
+  coord_cartesian(clip = "off") +
+  guides(shape = guide_legend(nrow = 3, override.aes = list(size = 3)),
+         color = guide_legend(nrow = 3, override.aes = list(size = 3)),
+         fill = guide_legend(nrow = 3, override.aes = list(size = 3))) 
+        
+
+plot_interactions
+
+plot_interactions -> Fig4e_interactionprograms
+```
+
+```{r plot the complete figure fig_4af, fig.width=13.5, fig.height=10, warning=FALSE}
+fig4ab_toprow <- plot_grid(fig4a_gg,
+                           figure_4b,
+                               nrow = 1, align = "h", axis = "tb", rel_widths = c(3.5, 10), labels = c("a","b"))
+
+fig4cde_bottomrow <- plot_grid(figure_4c,
+                              fig4d_camera_celltype,
+                           Fig4e_interactionprograms,
+                               nrow = 1, align = "h", axis = "tblr", rel_widths = c(3, 5.5, 6.6), labels = c("c", "d","e"))
+
+
+figure4 <- plot_grid(fig4ab_toprow,fig4cde_bottomrow, nrow = 2, rel_heights = c(1,1.5), align = "hv", axis = "tblr")
+
+figure4
+```
+
+Figure 4: 
+
+```{r save fig_4af, fig.width=13.5, fig.height=10}
+ggsave(paste0(figdir, "Figure 4 scRNA-seq UMAP Camera IPs.pdf"), figure4, units = "in", width = 13.5, height  = 10, bg = "white")
+
+ggsave(paste0(figdir, "Figure 4 scRNA-seq UMAP Camera IPs.png"), figure4, units = "in", width = 13.5, height  = 10, bg = "white", dpi = 300)
+```
+
+Figure 4. Single-cell analysis of peripheral immune compartment reveals inflammatory activation in monocytes in aparasitemic children. a. Design of single-cell experiments using M0 baseline PBMCs from a subset of 7 pairs of age- and sex-matched aparasitemic and parasitemic children from the parent study with specific exclusion of individuals carrying the HbS (sickle cell) allele. b. Uniform Manifold Approximation and Projection (UMAP) plots of single-cell RNA-seq data from all 82,044 PBMCs obtained from the 14 samples in 4a, with transcriptionally defined clusters annotated by reference mapping and separated by class. c. Number of differentially expressed genes at |LFC|>2 and p<0.005 by cell type and color-coded by innate/adaptive immune arms.  Differential gene expression was assessed by pseudobulk aggregation of counts followed by edgeR analysis. d. Enrichment analysis using competitive gene set testing (Camera) and the MSigDB Hallmark gene set collection to assess differential enrichment for indicated cell types between aparasitemic and parasitemic children within the indicated cell types. Only gene sets meeting the threshold of FDR<0.05 are shown. e. Cell-cell interactions were mapped across each cell type for aparasitemic and parasitemic subjects by assessing highly co-expressied ligand-receptor pairs and grouping them into interaction programs, which are color-coded in the figure. Bubble sizes represent aggregated interaction scores for each cell type based on the most highly expressed ligand-receptor pairs. 

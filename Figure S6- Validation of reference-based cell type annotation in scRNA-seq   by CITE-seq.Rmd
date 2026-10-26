@@ -1,0 +1,198 @@
+---
+title: "Figure S6: Validation of reference-based cell type annotation in scRNA-seq
+  by CITE-seq"
+author: "Prasida Holla"
+date: "2026-10-23"
+output: output:   
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(RColorBrewer)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(dplyr)
+library(ggplot2)
+library(scriabin)
+library(ggalluvial)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# Figure S6: expression level of markers as boxplots
+```{r cite-seq based celtype validation with key markers, include=TRUE, message=FALSE, warning=FALSE, fig.align='center', fig.height=9, fig.width=16}
+#import the 82k seurat object
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1Z1gGEfNz7R-qYXizY7Sg6mzJxJkEm6Ti"), path = temp, overwrite = TRUE)
+refmapped.all <- readRDS(file = dl$local_path)
+
+rownames(refmapped.all[["ADT"]])
+
+# create a list of markers
+lin_markers<-c("","CD19.1", "CD3", "CD4.1","CD8a", "CD14.1", "CD16", "CD56-NCAM", "CD11c")
+
+refmapped.all_adt<-subset(refmapped.all, subset=assay=="CITE-seq")
+DefaultAssay(refmapped.all_adt)<-"ADT"
+
+# keep only relevant cell types
+refmapped.all_adt<-subset(refmapped.all_adt, subset = predicted.celltype.l2 %in% c("B intermediate",
+                             "B memory",
+                             "B naive",
+                             "Plasmablast",
+                             "CD14 Mono",
+                             "CD16 Mono",
+                             "CD4 Naive",
+                             "CD4 TCM",
+                             "CD8 Naive",
+                             "CD8 TCM",
+                             "CD8 TEM",
+                             "cDC1",
+                             "cDC2",
+                             "pDC",
+                             "gdT",
+                             "ILC",
+                            "MAIT",
+                           "NK",
+                           "NK_CD56bright",
+                           "Treg"
+                           ))
+#VlnPlot(refmapped.all_adt, features = lin_markers, group.by = "predicted.celltype.l2")->vln_adt
+#vln_adt<-vln_adt+
+#  geom_boxplot(alpha = 0.4, color = "grey30", outlier.shape = NA) +
+ # stat_compare_means(label = "p", method = "wilcox.test", vjust = 1)
+
+# manual plotting
+linmarkers_ad.df<-FetchData(refmapped.all_adt,c(lin_markers,"subject_id", "predicted.celltype.l2", "phenotype"))
+linmarkers_ad.df<-linmarkers_ad.df%>%
+  pivot_longer(., !c("predicted.celltype.l2", "subject_id", "phenotype")) %>%
+  group_by(predicted.celltype.l2, subject_id, name, phenotype) %>%
+  summarise(n = median(value))
+
+celltype_levels<-c( "CD14 Mono",
+                    "CD16 Mono",
+                    "cDC1",
+                             "cDC2",
+                             "pDC",
+                     "NK",
+                           "NK_CD56bright",
+                    "B naive",
+                   "B intermediate",
+                   "B memory",
+                    "Plasmablast",
+                    "CD4 Naive",
+                             "CD4 TCM",
+                    "Treg",
+                             "CD8 Naive",
+                             "CD8 TCM",
+                             "CD8 TEM",
+                   "gdT",
+                             "ILC",
+                            "MAIT"
+                   )
+
+# reanme markers
+linmarkers_ad.df$name <-gsub("CD14.1","CD14", linmarkers_ad.df$name)
+linmarkers_ad.df$name <-gsub("CD19.1","CD19", linmarkers_ad.df$name)
+linmarkers_ad.df$name <-gsub("CD4.1","CD4", linmarkers_ad.df$name)
+linmarkers_ad.df$name <-gsub("CD56-NCAM","CD56", linmarkers_ad.df$name)
+linmarkers_ad.df$name <-gsub("CD8a","CD8", linmarkers_ad.df$name)
+
+manual_adt_violin<-ggplot(linmarkers_ad.df, aes(x=factor(predicted.celltype.l2, levels = celltype_levels), y=n, #fill = factor(phenotype, levels = c("Aparasitemic", "Parasitemic")), 
+                                                color = phenotype)) +
+  geom_point(position = position_jitterdodge(), size=1, alpha=0.65) +
+  geom_boxplot(alpha = 0.4, color = "grey30", outlier.shape = NA) +
+  #stat_compare_means(label = "p", 
+  #                   comparisons = my_comps, method = "wilcox.test", vjust = 1) +
+  scale_color_manual(values = c( "Aparasitemic"="#3B9AB2",  "Parasitemic"="#F21A00" )) +
+  xlab("transcriptionally defined subset") +
+  ylab("surace expression by antibody-derived tags (CITE-seq)") +
+  facet_wrap(~name, scales = "free", nrow=2) +
+  ylim(0, 500)+
+  theme(axis.text.y = element_text(size=8),
+        axis.text.x = element_text(size=8, angle = 90, vjust = 0.5, hjust=1),
+        axis.title.y  = element_text(size=16),
+        axis.title.x  = element_text(size=16),
+        strip.text = element_text(size= 14),
+        legend.position = "top",
+        legend.text = element_text(size= 16),
+        panel.background = element_blank(),
+        panel.grid.major = element_blank(),
+        panel.grid.minor = element_blank(),
+        panel.border = element_rect(colour = "darkgrey", fill=NA, size=1),
+        plot.margin=unit(c(0.01,0.01,0.01,0.01), "null"))+
+  grids(linetype = "dashed")+
+  ylim(0,80)
+
+
+manual_adt_violin
+```
+
+# Save the figure
+
+```{r cite-seq based celtype validation with key markers save, include=TRUE, message=FALSE, warning=FALSE}
+
+ggsave(paste0(figdir, "Figure S6- Validation of reference-based cell type annotation in scRNA-seq
+  by CITE-seq.pdf"), manual_adt_violin, units = "in", height = 9, width = 16, bg = "white")
+
+ggsave(paste0(figdir, "Figure S6- Validation of reference-based cell type annotation in scRNA-seq
+  by CITE-seq.png"), manual_adt_violin, units = "in", height = 9, width = 16, bg = "white", dpi = 300)
+
+```
+
+

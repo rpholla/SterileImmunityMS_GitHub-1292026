@@ -1,5 +1,5 @@
 ---
-title: "Figure S8- per subject cell type distributions"
+title: "Figure S8- per subject cell type distributions and ex vivo volcanos (relates to Figure 4)"
 author: "Prasida Holla"
 date: "2025-08-12"
 output:
@@ -41,8 +41,9 @@ library(tmod)
 library(Biobase)
 library(pdftools)
 library(ggh4x)
+library(RColorBrewer)
 
-figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Clean Figures/"
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
 
 draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
   if (is.null(theme)) {
@@ -64,28 +65,51 @@ draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
 }
 ```
 
-# import the ex vivo object and re-clustered monocytes with pseudotime trajectoruies calculated
+# import the ex vivo object and re-clustered monocytes with pseudotime trajectories calculated
 ```{r import exvvio seurat object susbset B cells and recluster, include=TRUE, message=TRUE}
-# import the ffll ex vivo 78k object
-temp <- tempfile(fileext = ".rds")
-dl <- drive_download(
-as_id("1W_oqvtGPdUlF2BcOH4AKsc80ZS2DNPCy"), path = temp, overwrite = TRUE)
-exvivo<-readRDS(file = dl$local_path)
 
+# import the ffll ex vivo 82 K object
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1Z1gGEfNz7R-qYXizY7Sg6mzJxJkEm6Ti"), path = temp, overwrite = TRUE)
+refmapped.all <- readRDS(file = dl$local_path)
+
+#refmapped.all <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-refmapped.all and multiome)/Non downsampled filteredcounts_SterImm_14samples_82kcells_integrated_reduced_annoted_RNA_HTO_ADT_peak045_07_2026.rds")
+
+refmapped.all$predicted.celltype.l2 = gsub("Proliferating", "prolif.", refmapped.all$predicted.celltype.l2)
+refmapped.all$predicted.celltype.l2 = gsub("intermediate", "intermed.", refmapped.all$predicted.celltype.l2)
 ```
 
-# a. plot umapsof all 78k cells separated by subject
-```{r per subject umap, fig.align='center', fig.width= 12, fig.height= 4}
+# a. plot umaps of all 78k cells separated by subject
+```{r per subject umap, fig.align='center', fig.width= 18, fig.height= 6}
 
-Idents(exvivo)<-exvivo$phenotype
-aparacells<-WhichCells(exvivo, idents = "Aparasitemic")
-paracells<-WhichCells(exvivo, idents = "Parasitemic")
+# downsample
+set.seed(1000)
+
+table(refmapped.all$phenotype)
+
+Idents(refmapped.all) <- 'phenotype'
+cell.list.para <- WhichCells(refmapped.all, idents= "Parasitemic", downsample = 40989)
+
+cell.list.apara <- WhichCells(refmapped.all, idents= "Aparasitemic")
+
+cell.list <- c(cell.list.apara, cell.list.para)
+
+refmapped.all.downsampled <- refmapped.all[, cell.list]
+
+Idents(refmapped.all.downsampled) <- 'seurat_clusters'
 
 
-apara_umap <- DimPlot(exvivo,  pt.size = 3.5, reduction = "ref.umap", cells = aparacells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+Idents(refmapped.all.downsampled)<-refmapped.all.downsampled$phenotype
+aparacells<-WhichCells(refmapped.all.downsampled, idents = "Aparasitemic")
+paracells<-WhichCells(refmapped.all.downsampled, idents = "Parasitemic")
+
+
+apara_umap <- DimPlot(refmapped.all.downsampled,  pt.size = 3.5, reduction = "ref.umap", cells = aparacells, alpha = 0.45, combine = FALSE, group.by = "predicted.celltype.l2")[[1]]$data %>%
   mutate(class = "aparasitemic") 
 
-para_umap <- DimPlot(exvivo,  pt.size = 3.5, reduction = "ref.umap",  cells = paracells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+para_umap <- DimPlot(refmapped.all.downsampled,  pt.size = 3.5, reduction = "ref.umap",  cells = paracells, alpha = 0.45, combine = FALSE, group.by = "predicted.celltype.l2")[[1]]$data %>%
   mutate(class = "parasitemic") 
 
 all_umap <- bind_rows(apara_umap,
@@ -97,15 +121,30 @@ strip_apara <- strip_themed(background_y = elem_list_rect(fill = c( "#58a4cb", a
 
 strip_para <- strip_themed(background_y = elem_list_rect(fill = c( "#e41a1c", alpha = 0.6)))
 
+cells_to_label <- c("CD14 Mono", "CD16 Mono", "CD4 Naive", "CD4 TEM", "CD8 Naive", "B memory", "B naive", "pDC", "cDC2", "CD8 TEM", "NK", "gdT", "MAIT",
+                    "Treg", "NK_CD56bright")
 
+all_umap$celltype_factor <- factor(all_umap$predicted.celltype.l2)
+all_umap$celltype_num <- as.numeric(all_umap$celltype_factor)
+legend_labels <- paste0(1:29, " - ", levels(all_umap$celltype_factor))
+
+
+new_colors = colorRampPalette(brewer.pal(10,"Spectral"))(length(unique(all_umap$predicted.celltype.l2)))
+find_center <- function(my_vector) my_vector[ceiling(length(my_vector)/2)]
 
 all_umap <- all_umap %>%
   rownames_to_column(., "barcode")
 
-all_umap_plot_bysubj_apara <- exvivo@meta.data %>%
+all_umap_plot_bysubj_apara <- refmapped.all.downsampled@meta.data %>%
   rownames_to_column(., "barcode") %>%
-  dplyr::select(c("subject_id", "barcode", "predicted.celltype.l1")) %>%
+  dplyr::select(c("subject_id", "barcode", "predicted.celltype.l2")) %>%
   left_join(all_umap, by="barcode") %>%
+  group_by(class, predicted.celltype.l2.x, subject_id) %>%
+  mutate(midval_umap1_by_celltype = find_center(UMAP_1)) %>%
+  mutate(midval_umap2_by_celltype = find_center(UMAP_2)) %>%
+  mutate(cell_label = as.character(celltype_num)) %>%
+  mutate(label = ifelse(predicted.celltype.l2.x %in% cells_to_label & UMAP_1 == midval_umap1_by_celltype, cell_label, "")) %>%
+  ungroup() %>%
   mutate(subj_id = ifelse(subject_id == "kali0585", "subject 1", subject_id)) %>%
   mutate(subj_id = ifelse(subj_id == "kali0618", "subject 2", subj_id)) %>%
   mutate(subj_id = ifelse(subj_id == "kali0631", "subject 4", subj_id)) %>%
@@ -120,12 +159,17 @@ all_umap_plot_bysubj_apara <- exvivo@meta.data %>%
   mutate(subj_id = ifelse(subj_id == "kali0640", "subject 12", subj_id)) %>%
   mutate(subj_id = ifelse(subj_id == "kali0650", "subject 13", subj_id)) %>%
   mutate(subj_id = ifelse(subj_id == "kali0651", "subject 14", subj_id)) %>%
-  subset(class == "aparasitemic") %>%
-  ggplot(., aes(x = UMAP_1, y = UMAP_2, fill = "predicted.celltype.l1")) +
-  geom_point(pch=21, size = 1, stroke = 0.05) +
+  subset(class == "aparasitemic") %>% 
+  ggplot(., aes(x = UMAP_1, y = UMAP_2, color = as.factor(celltype_num))) +
+ geom_point(size = 0.5) +
+  geom_text(aes(label = label), color = "black", size = 4) +
   xlab("UMAP 1") +
   ylab("UMAP 2") +
   theme_bw() +
+  scale_color_manual(
+    name = "Cell Type",
+    values = new_colors,
+    labels = legend_labels) +
   theme(legend.position = "none",
         legend.margin = margin(),
         legend.spacing.y = unit(0.1, "cm"),
@@ -135,10 +179,16 @@ all_umap_plot_bysubj_apara <- exvivo@meta.data %>%
         strip.text = element_text(size = 14)) +
   facet_grid2(rows = vars(class), cols = vars(factor(subj_id)), strip = strip_apara, independent = "all", scales = "free", space= "free")
 
-all_umap_plot_bysubj_para <- exvivo@meta.data %>%
+all_umap_plot_bysubj_para <- refmapped.all.downsampled@meta.data %>%
   rownames_to_column(., "barcode") %>%
-  dplyr::select(c("subject_id", "barcode", "predicted.celltype.l1")) %>%
+  dplyr::select(c("subject_id", "barcode", "predicted.celltype.l2")) %>%
   left_join(all_umap, by="barcode") %>%
+  group_by(class, predicted.celltype.l2.x, subject_id) %>%
+  mutate(midval_umap1_by_celltype = find_center(UMAP_1)) %>%
+  mutate(midval_umap2_by_celltype = find_center(UMAP_2)) %>%
+  mutate(cell_label = as.character(celltype_num)) %>%
+  mutate(label = ifelse(predicted.celltype.l2.x %in% cells_to_label & UMAP_1 == midval_umap1_by_celltype, cell_label, "")) %>%
+  ungroup() %>%
   mutate(subj_id = ifelse(subject_id == "kali0585", "subject 1", subject_id)) %>%
   mutate(subj_id = ifelse(subj_id == "kali0618", "subject 2", subj_id)) %>%
   mutate(subj_id = ifelse(subj_id == "kali0631", "subject 4", subj_id)) %>%
@@ -154,44 +204,176 @@ all_umap_plot_bysubj_para <- exvivo@meta.data %>%
   mutate(subj_id = ifelse(subj_id == "kali0650", "subject 13", subj_id)) %>%
   mutate(subj_id = ifelse(subj_id == "kali0651", "subject 14", subj_id)) %>%
   subset(class == "parasitemic") %>%
-  ggplot(., aes(x = UMAP_1, y = UMAP_2, fill = "predicted.celltype.l1")) +
-  geom_point(pch=21, size = 1, stroke = 0.05) +
+  ggplot(., aes(x = UMAP_1, y = UMAP_2, color = as.factor(celltype_num))) +
+ geom_point(size = 0.5) +
+  geom_text(aes(label = label), color = "black", size = 4) +
   xlab("UMAP 1") +
   ylab("UMAP 2") +
+  scale_color_manual(
+    name = "cell type",
+    values = new_colors,
+    labels = legend_labels) +
   theme_bw() +
-  theme(legend.position = "none",
+  theme(legend.position = "bottom",
         legend.margin = margin(),
         legend.spacing.y = unit(0.1, "cm"),
         legend.key.height = unit(0.75, "lines"),
-        legend.text = element_blank(),
+         legend.key.size = unit(1, "lines"),
+        legend.text = element_text(size = 7),
         plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
         strip.text = element_text(size = 14)) +
-  facet_grid2(rows = vars(class), cols = vars(factor(subj_id, levels = c("subject 8", "subject 9", "subject 10", "subject 11", "subject 12", "subject 13", "subject 14"))), strip = strip_para, independent = "all", scales = "free", space= "free")
+  facet_grid2(rows = vars(class), cols = vars(factor(subj_id, levels = c("subject 8", "subject 9", "subject 10", "subject 11", "subject 12", "subject 13", "subject 14"))), strip = strip_para, independent = "all", scales = "free", space= "free") +
+  guides(colour = guide_legend(title="cell type",
+                               nrow = 3,
+                               override.aes = list(size=2.5)))
 
 all_umap_by_subj <- plot_grid(all_umap_plot_bysubj_apara,
                               all_umap_plot_bysubj_para,
-                              nrow = 2)
+                              nrow = 2, 
+                              rel_heights = c(2.6, 3.4))
 
-all_umap_by_subj -> figure_s7a
+all_umap_by_subj -> figure_s8a
 
 all_umap_by_subj
 ```
 
-# b. Import wnn re-clustered nk and monocytes from figure 5 and show per subject distribution
+# b. create volcano plots across all cell types in Figure 4b
 
-```{r nkmono wnn umap plots, fig.align='center', fig.width=8, fig.height=6}
-temp <- tempfile(fileext = ".rds")
+```{r import degs, include=TRUE}
+
+# import edgeR topDEs 
+temp<-tempfile(fileext = ".rds")
 dl <- drive_download(
-as_id("1rgn3_aGYcAI-MNjhR-tftAbtNJ6FJRiT"), path = temp, overwrite = TRUE)
+as_id("1x9W2Vbnu6DBELA8PCQaVC0XCBeRRfThv"), path = temp, overwrite = TRUE)
+degs <- readRDS(file = dl$local_path)
+
+#degs <- readRDS("~/Desktop/R21 Sterile Immunity Data and Scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/SterImm_edgeR_topdiff_genes_82kobj_lmfit_w_duppcorr_pairingblock_object_Aug_2026.rds")
+
+# import CAMERA results
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1EryRzuHF7w8zi0bGstLKdjD-C5g2kYqh"), path = temp, overwrite = TRUE)
+camera_hall<-readRDS(file = dl$local_path)
+
+#camera_hall<-readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/SterImm_edgeR_CAMERApr_Hallmark_82kobj_lmfit_w_duppcorr_pairingblock_object_Aug_2026.rds") #local
+
+camera_hall_bound_filtered <- camera_hall %>%
+  mutate(neglog10pval = -log10(PValue)) %>%
+  arrange(desc(neglog10pval)) %>%
+  dplyr::filter(FDR < 0.01) %>%
+  dplyr::filter(celltype != "dnT") %>%
+  mutate(pathway = gsub("HALLMARK_", "", pathway)) %>%
+  mutate(pathway = gsub("_", " ", pathway))
+
+```
+
+# b: create faceted volcano plot
+
+
+```{r volcano plots, fig.align='center', fig.height=6, fig.width=18}
+
+lfc_threshold <- 2
+signif_threshold <- 0.005
+
+hallmark_sigs <- read_rds("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/modules for GSEA/MSigDB_Hallmark_v7.4.rds")
+
+
+hallmark_camera_genes <- c(hallmark_sigs$HALLMARK_WNT_BETA_CATENIN_SIGNALING,
+                          hallmark_sigs$HALLMARK_UV_RESPONSE_UP, 
+                          hallmark_sigs$HALLMARK_UNFOLDED_PROTEIN_RESPONSE,
+                          hallmark_sigs$HALLMARK_TNFA_SIGNALING_VIA_NFKB,
+                          hallmark_sigs$HALLMARK_TGF_BETA_SIGNALING,
+                          hallmark_sigs$HALLMARK_PROTEIN_SECRETION, 
+                          hallmark_sigs$HALLMARK_PI3K_AKT_MTOR_SIGNALING, 
+                          hallmark_sigs$HALLMARK_P53_PATHWAY,
+                          hallmark_sigs$HALLMARK_OXIDATIVE_PHOSPHORYLATION, 
+                          hallmark_sigs$HALLMARK_MYC_TARGETS_V1,
+                          hallmark_sigs$HALLMARK_MTORC1_SIGNALING,
+                          hallmark_sigs$HALLMARK_MITOTIC_SPINDLE,
+                          hallmark_sigs$HALLMARK_INTERFERON_GAMMA_RESPONSE,
+                          hallmark_sigs$HALLMARK_INTERFERON_ALPHA_RESPONSE,
+                          hallmark_sigs$HALLMARK_INFLAMMATORY_RESPONSE,
+                          hallmark_sigs$HALLMARK_IL6_JAK_STAT3_SIGNALING,
+                          hallmark_sigs$HALLMARK_IL2_STAT5_SIGNALING,
+                          hallmark_sigs$HALLMARK_HYPOXIA,
+                          hallmark_sigs$HALLMARK_HEME_METABOLISM,
+                          hallmark_sigs$HALLMARK_G2M_CHECKPOINT,
+                          hallmark_sigs$HALLMARK_ESTROGEN_RESPONSE_EARLY,
+                          hallmark_sigs$HALLMARK_EPITHELIAL_MESENCHYMAL_TRANSITION,
+                          hallmark_sigs$HALLMARK_DNA_REPAIR,
+                          hallmark_sigs$HALLMARK_COMPLEMENT,
+                          hallmark_sigs$HALLMARK_APOPTOSIS,
+                          hallmark_sigs$HALLMARK_ANDROGEN_RESPONSE,
+                          hallmark_sigs$HALLMARK_ADIPOGENESIS, 
+                          "IFNG")
+                          
+                        
+
+figs8b_volcano_plot <- degs %>%
+  bind_rows(., .id = "cell_type") %>%
+  dplyr::filter(cell_type %in% levels(factor(camera_hall_bound_filtered$celltype))) %>%
+  mutate(lfc_neglogpval = abs(logFC)*-log(P.Value)) %>%
+  mutate(dot_color = ifelse(logFC > 0, "up in aparasitemic", "up in parasitemic")) %>%
+  mutate(dot_color = ifelse(abs(logFC) < lfc_threshold | P.Value >= signif_threshold, "ns", dot_color)) %>%
+  mutate(dot_color = factor(dot_color, levels = c("up in parasitemic", "up in aparasitemic", "ns"))) %>%
+  mutate(label = ifelse((P.Value < signif_threshold & abs(logFC) > lfc_threshold & gene_symbol %in% hallmark_camera_genes) | lfc_neglogpval %in% tail(sort(.$lfc_neglogpval), 2) , gene_symbol, "")) %>%
+  ggplot(., aes(x = logFC, y = -log10(P.Value))) +
+  geom_point(aes(color = dot_color), size = 2.5, alpha = 0.6) +
+  geom_hline(yintercept = -log10(signif_threshold), color = "gray20", linetype = "dotted") +
+  geom_vline(xintercept = c(-2,2), color = "gray20", linetype = "dotted") +
+  ylab(bquote(~-log[10] ~ "P value")) +
+  xlab(bquote(~log[2] ~ "fold change")) +
+ ggrepel::geom_text_repel(aes(label = label), max.overlaps = Inf, size=4) +
+  scale_x_continuous(limits = c(-10,10), breaks = c(-10, -6, -2, 0, 2, 6, 10)) +
+  scale_color_manual(values = c("up in aparasitemic" = "#58a4cb", "up in parasitemic"= "#e41a1c", "ns" = "gray")) +
+  theme_bw() +
+  theme(plot.title = element_text(margin=margin(t=17.5,b=-25), hjust = 0.05, vjust = -40),
+        axis.title = element_text(size = 12),
+        strip.text = element_text(size = 13),
+        legend.position = "top",
+        legend.text = element_text(size= 11),
+        legend.title = element_blank(),
+        plot.margin=unit(c(0.05,0.05,0.05,0.05), "null")) +
+  facet_wrap(~cell_type, nrow=2)# +
+  #guides(color = guide_legend(nrow = 3), 
+                             # override.aes = list(size = 4))
+
+figs8b_volcano_plot
+
+```
+
+
+# Figure S8c: Import wnn re-clustered nk and monocytes from figure 5 and show per subject distribution
+
+```{r nkmono wnn import, fig.align='center', fig.width=10, fig.height=5}
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1hYk-5ndaUTz2aVW4vkm6sGOOvasRyKCP"), path = temp, overwrite = TRUE)
 nkmono <- readRDS(file = dl$local_path)
 
+# nkmono <- readRDS("82k_WNN reclustered exvivo NK monos with ALRA.rds") # local
+
+# universally change cluster number to start from 1 instead of zero
+Idents(nkmono) <- 'seurat_clusters'
+
+table(Idents(nkmono)) # before changing
+
+nkmono$seurat_clusters <- as.factor(as.numeric(as.character(nkmono$seurat_clusters)) + 1)
+
+Idents(nkmono) <- "seurat_clusters" # reassign
+
+table(nkmono$predicted.celltype.l2, Idents(nkmono)) # check. there are 2cells that are cDC2, remove them
+
+nkmono <- subset(nkmono, subset= predicted.celltype.l2 != "cDC2")
 
 # downsample
 
 table(nkmono$phenotype)
 
 Idents(nkmono) <- 'phenotype'
-cell.list.para <- WhichCells(nkmono, idents= "Parasitemic", downsample = 1503)
+cell.list.para <- WhichCells(nkmono, idents= "Parasitemic", downsample = 1612)
 cell.list.apara <- WhichCells(nkmono, idents= "Aparasitemic")
 
 cell.list <- c(cell.list.apara, cell.list.para)
@@ -199,8 +381,10 @@ cell.list <- c(cell.list.apara, cell.list.para)
 nkmono.downsampled <- nkmono[, cell.list]
 
 Idents(nkmono.downsampled) <- 'seurat_clusters'
+```
 
 
+```{r nkmono wnn umap plots, fig.align='center', fig.width=18, fig.height=7}
 DimPlot(nkmono.downsampled, reduction = "wnn.umap", label=T, split.by = "phenotype")
 
 apara_wnn_dat <- DimPlot(nkmono.downsampled, 
@@ -223,22 +407,7 @@ para_wnn_dat <- DimPlot(nkmono.downsampled,
 
 all_wnn_dat <- bind_rows(apara_wnn_dat,
                           para_wnn_dat) %>%
-  mutate(class = factor(class, levels = c("parasitemic", "aparasitemic"))) %>%
-  mutate(ident = case_when(
-    ident == "13" ~ "14",
-    ident == "12" ~ "13",
-     ident == "11" ~ "12",
-     ident == "10" ~ "11",
-    ident == "9" ~ "10",
-    ident == "8" ~ "9",
-    ident == "7" ~ "8",
-    ident == "6" ~ "7",
-    ident == "5" ~ "6",
-    ident == "4" ~ "5",
-    ident == "3" ~ "4",
-    ident == "2" ~ "3",
-    ident == "1" ~ "2",
-    ident == "0" ~ "1"))
+  mutate(class = factor(class, levels = c("parasitemic", "aparasitemic"))) 
 
 library(ggh4x)
 strip_apara <- strip_themed(background_y = elem_list_rect(fill = c( "#58a4cb", alpha = 0.6)))
@@ -265,18 +434,21 @@ all_wnnumap_plot_bysubj_apara <- nkmono.downsampled@meta.data %>%
   mutate(subj_id = ifelse(subj_id == "kali0650", "subject 8", subj_id)) %>%
   subset(class == "aparasitemic") %>%
   ggplot(., aes(x = wnnUMAP_1, y = wnnUMAP_2, color = factor(ident,levels = as.character(sort(as.numeric(unique(ident))))))) +
-  geom_point(pch=21, size = 2, stroke = 0.5) +
+  geom_point(alpha=0.6, size=0.5) +
   xlab("UMAP 1") +
   ylab("UMAP 2") +
  scale_color_manual(values = new_colors) +
   theme_bw() +
-  theme(legend.position = "none",
+  theme(legend.position = "right",
         legend.margin = margin(),
         legend.spacing.y = unit(0.1, "cm"),
         legend.key.height = unit(0.75, "lines"),
         plot.margin=unit(c(0.1,1,0.1,1), "null"),
         strip.text = element_text(size = 12)) +
-  facet_grid2(rows = vars(class), cols = vars(subj_id), strip = strip_apara)
+  facet_grid2(rows = vars(class), cols = vars(subj_id), strip = strip_apara) +
+  guides(colour = guide_legend(title="cluster",
+                                 nrow = 15,
+                                 override.aes = list(size=2.5)))
 
 all_wnnumap_plot_bysubj_para <- nkmono.downsampled@meta.data %>%
   rownames_to_column(., "barcode") %>%
@@ -292,12 +464,12 @@ all_wnnumap_plot_bysubj_para <- nkmono.downsampled@meta.data %>%
   mutate(subj_id = ifelse(subj_id == "kali0650", "subject 8", subj_id)) %>%
   subset(class == "parasitemic") %>%
   ggplot(., aes(x = wnnUMAP_1, y = wnnUMAP_2, color = factor(ident,levels = as.character(sort(as.numeric(unique(ident))))))) +
-  geom_point(pch=21, size = 2, stroke = 0.5) +
+  geom_point(alpha=0.6, size=0.5) +
   xlab("UMAP 1") +
   ylab("UMAP 2") +
  scale_color_manual(values = new_colors) +
   theme_bw() +
-  theme(legend.position = "bottom",
+  theme(legend.position = "right",
         legend.margin = margin(),
         legend.spacing.y = unit(0.1, "cm"),
         legend.key.height = unit(0.75, "lines"),
@@ -305,41 +477,42 @@ all_wnnumap_plot_bysubj_para <- nkmono.downsampled@meta.data %>%
         strip.text = element_text(size = 12)) +
   facet_grid2(rows = vars(class), cols = vars(subj_id), strip = strip_para) +
   guides(colour = guide_legend(title="cluster",
-                                 nrow = 3,
+                                 nrow = 15,
                                  override.aes = list(size=2.5)))
 
 all_wnn_umap_by_subj <- plot_grid(all_wnnumap_plot_bysubj_apara,
                               all_wnnumap_plot_bysubj_para,
                               nrow = 2,
-                              rel_heights = c(0.8,1))
+                              align = 'l',
+                              rel_heights = c(1,1))
 
-all_wnn_umap_by_subj -> figure_s7b
+all_wnn_umap_by_subj -> figure_s8c
 
 all_wnn_umap_by_subj
 ```
 
 # assmeble figure parts
 
-```{r assemble figure, fig.align='center', fig.height= 10, fig.width= 12}
+```{r assemble figure, fig.align='center', fig.height= 19, fig.width= 18}
 
-figureS7 <- plot_grid(figure_s7a,
-                      figure_s7b,
-                      nrow = 2,
-                      rel_heights = c(1,1.4),
-                      rel_widths = c(1, 1.2),
-                      labels = c('a', 'b'), 
-                      align = "h",
+figureS8 <- plot_grid(figure_s8a,
+                      figs8b_volcano_plot,
+                    figure_s8c,
+                      nrow = 3,
+                      rel_heights = c(6,6, 7),
+                      labels = c('a', 'b', 'c'), 
+                      align = "l",
                       axis = "tbrl")
 
-figureS7
+figureS8
 ```
 
 # save
 
 ```{r save figure, fig.align='center', fig.height= 10, fig.width= 12}
 
-ggsave(paste0(figdir, "Figure S7 per subject umap plots for fig4 and 5.pdf"), figureS7, units = "in", height = 10, width = 12, bg = "white")
+ggsave(paste0(figdir, "Figure S7 per subject umap plots for fig4 and 5.pdf"), figureS8, units = "in", height = 19, width = 18, bg = "white")
 
-ggsave(paste0(figdir, "Figure S7 per subject umap plots for fig4 and 5.png"), figureS7, units = "in", height = 10, width = 12, bg = "white", dpi = 300)
+ggsave(paste0(figdir, "Figure S8 per subject umap plots for fig4 and 5.png"), figureS8, units = "in", height = 19, width = 18, bg = "white", dpi = 300)
 ```
 

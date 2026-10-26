@@ -1,0 +1,973 @@
+---
+title: "New Figure 5: Nk and mono re-clustering and characterization"
+author: "Prasida Holla"
+date: "2026-09-22"
+output: 
+output:
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+#library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(RColorBrewer)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(dplyr)
+library(ggplot2)
+#library(scriabin)
+library(ggalluvial)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# A: umap plots of re-clustered of NK cells and monocytes from CITE-seq data using WNN
+
+```{r import re-clustered NK mono data, fig.align='center', fig.width=15.5, fig.height=4.5}
+# import the re-clustered object (on which ALRA has been run)
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1hYk-5ndaUTz2aVW4vkm6sGOOvasRyKCP"), path = temp, overwrite = TRUE)
+nkmono <- readRDS(file = dl$local_path)
+
+# nkmono <- readRDS("82k_WNN reclustered exvivo NK monos with ALRA.rds") # local
+
+# universally change cluster number to start from 1 instead of zero
+Idents(nkmono) <- 'seurat_clusters'
+
+table(Idents(nkmono)) # before changing
+
+nkmono$seurat_clusters <- as.factor(as.numeric(as.character(nkmono$seurat_clusters)) + 1)
+
+Idents(nkmono) <- "seurat_clusters" # reassign
+
+table(nkmono$predicted.celltype.l2, Idents(nkmono)) # check. there are 2cells that are cDC2, remove them
+
+nkmono <- subset(nkmono, subset= predicted.celltype.l2 != "cDC2")
+
+```
+
+
+```{r umap plots, fig.align='center', fig.width=15.5, fig.height=4.5}
+
+# downsample
+
+table(nkmono$phenotype)
+
+Idents(nkmono) <- 'phenotype'
+cell.list.para <- WhichCells(nkmono, idents= "Parasitemic", downsample = 1612)
+cell.list.apara <- WhichCells(nkmono, idents= "Aparasitemic")
+
+cell.list <- c(cell.list.apara, cell.list.para)
+
+nkmono.downsampled <- nkmono[, cell.list]
+
+Idents(nkmono.downsampled) <- 'seurat_clusters'
+
+# create a version for final figure 5a
+all.split<-SplitObject(nkmono.downsampled, split.by = "phenotype")
+all_para <-all.split$Parasitemic
+all_apara <-all.split$Aparasitemic
+
+
+# plot all cells in a single umap showing clusters
+all_umap_plot1 <- nkmono.downsampled %>%
+  DimPlot(.,
+          reduction = "wnn.umap", 
+          group.by = "ident", 
+          label = TRUE, 
+          label.size = 3, 
+          repel = TRUE,
+          pt.size = 0.03,
+          raster = FALSE,
+          combine = FALSE)
+
+all_umap_plot1 <- all_umap_plot1[[1]]$data %>%
+  mutate(class = "all cells (3224 cells, n = 8)")
+
+
+# plot aparasitemic clusters
+
+clusters_apara_plot2 <- all_apara %>%
+  DimPlot(.,
+          reduction = "wnn.umap", 
+          group.by = "ident", 
+          label = TRUE, 
+          label.size = 3, 
+          repel = TRUE,
+          pt.size = 0.03,
+          raster = FALSE,
+          combine = FALSE)
+
+clusters_apara_plot2 <- clusters_apara_plot2[[1]]$data %>%
+  mutate(class = "aparasitemic (1612 cells, n = 4)")
+
+# plot parasitemic clusters 
+
+clusters_para_plot3 <- all_para %>%
+  DimPlot(.,
+          reduction = "wnn.umap", 
+          group.by = "ident", 
+          label = TRUE, 
+          label.size = 3, 
+          repel = TRUE,
+          pt.size = 0.03,
+          raster = FALSE,
+          combine = FALSE)
+
+clusters_para_plot3 <- clusters_para_plot3[[1]]$data %>%
+  mutate(class = "parasitemic (1612 cells, n = 4)")
+
+# all cells showing cell types
+all_celltype_plot4 <- nkmono.downsampled %>%
+  DimPlot(.,
+          reduction = "wnn.umap", 
+          group.by = "predicted.celltype.l2", 
+          label = TRUE, 
+          label.size = 3, 
+          repel = TRUE,
+          pt.size = 0.03,
+          raster = FALSE,
+          combine = FALSE)
+
+all_celltype_plot4 <- all_celltype_plot4[[1]]$data %>%
+  mutate(class = "cell types")
+
+
+# plot the first three umaps showing cluster information
+
+all_umaps_dat_clusters_123 <- bind_rows(all_umap_plot1,
+                                        clusters_apara_plot2,
+                                        clusters_para_plot3) %>%
+  mutate(class = factor(class, levels = c("all cells (3224 cells, n = 8)",
+                                          "aparasitemic (1612 cells, n = 4)",
+                                          "parasitemic (1612 cells, n = 4)"))) 
+
+strip <- ggh4x::strip_themed(background_x = elem_list_rect(fill = c("gray80", "#58a4cb",   "#e41a1c", alpha = 0.6)))
+
+# get colors
+display.brewer.all(n=10, exact.n=FALSE) # pick a qualitative palette for cell type and use spectral for clusters
+
+new_colors_clusters = colorRampPalette(brewer.pal(10,"Spectral"))(length(unique(all_umaps_dat_clusters_123$ident)))
+
+find_center <- function(my_vector) my_vector[ceiling(length(my_vector)/2)]
+
+figure_5a_clusters <- all_umaps_dat_clusters_123 %>%
+    group_by(class, ident) %>%
+    mutate(midval_umap1_by_celltype = find_center(wnnUMAP_1)) %>%
+    mutate(midval_umap2_by_celltype = find_center(wnnUMAP_2)) %>%
+    mutate(cell_label = factor(ident, levels = as.character(sort(as.numeric(unique(ident)))))) %>%
+    mutate(label = ifelse(wnnUMAP_1 == midval_umap1_by_celltype & class == "all cells (3224 cells, n = 8)", cell_label, "")) %>%
+    ungroup() %>%
+    ggplot(., aes(x = wnnUMAP_1, y = wnnUMAP_2, color = factor(ident,levels = as.character(sort(as.numeric(unique(ident))))))) +
+    geom_point(size = 0.5) +
+    scale_color_manual(values = new_colors_clusters) +
+    geom_text(aes(label = label), color = "black", size = 4) +
+    xlab("wnnUMAP 1") +
+    ylab("wnnUMAP 2") +
+    theme_bw() +
+    theme(legend.position = "top",
+          legend.margin = margin(),
+          legend.spacing.x = unit(0.05, "cm"),
+          legend.spacing.y = unit(0.05, 'cm'),
+          legend.key.size = unit(1, "lines"),
+          legend.text = element_text(size = 11),
+          plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+          strip.text = element_text(size = 11)) +
+    facet_grid2(cols = vars(class), strip = strip) +
+    guides(colour = guide_legend(title="cluster",
+                                 nrow = 1,
+                                 override.aes = list(size=2.5)))
+
+figure_5a_clusters
+
+# plot fourth umap showing cell type
+
+new_colors_celltype = colorRampPalette(brewer.pal(10,"Paired"))(length(unique(all_celltype_plot4$predicted.celltype.l2)))
+
+figure_5a_celltypes <- all_celltype_plot4 %>%
+  group_by(class, predicted.celltype.l2) %>%
+  mutate(midval_umap1_by_celltype = find_center(wnnUMAP_1)) %>%
+  mutate(midval_umap2_by_celltype = find_center(wnnUMAP_2)) %>%
+  mutate(cell_label = as.character(predicted.celltype.l2)) %>%
+   mutate(label = ifelse(wnnUMAP_1 == midval_umap1_by_celltype, cell_label, "")) %>%
+  ungroup() %>%
+  ggplot(., aes(x = wnnUMAP_1, y = wnnUMAP_2, color = predicted.celltype.l2)) +
+  geom_point(size = 0.5, alpha=0.6) +
+  scale_color_manual(values = c("#CAB1D6", "#644095", "#ADCDE1", "#3B75AE", "#559F3F", "#FF7F00")) +
+  #geom_text(aes(label = label), color = "grey20", size = 5) +
+  xlab("wnnUMAP 1") +
+  ylab("wnnUMAP 2") +
+  theme_bw() +
+  theme(legend.position = "top",
+        legend.margin = margin(),
+        legend.spacing.x = unit(0.05, "cm"),
+        legend.spacing.y = unit(0.05, 'cm'),
+        legend.key.size = unit(1, "lines"),
+        legend.text = element_text(size = 11),
+        plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+        strip.text = element_text(size = 11)) +
+  guides(colour = guide_legend(title="cell type",
+                               nrow = 3,
+                               override.aes = list(size=2.5))) +
+  coord_cartesian(clip = "off")
+
+figure_5a_celltypes
+
+
+Figure5a <- plot_grid(figure_5a_clusters, 
+                      figure_5a_celltypes, 
+                      nrow = 1, 
+                      rel_widths = c(1, 0.38))
+
+Figure5a 
+```
+
+# B: Cell surface marker expression across NK cell and monocyte clusters
+
+## Reassign cluster numbers, split NK and monocytes and set up markers to be included
+
+```{r set up cluster numbers from one and select mono and NK markers}
+
+table(nkmono$predicted.celltype.l2, nkmono$seurat_clusters)
+
+# total number of cells are 3512. Keep only cells that are more than 5% of total (> 175 cells). This includes C1,2,3,4,5,6,7,8
+
+Idents(nkmono) <- 'seurat_clusters'
+
+mono <- subset(nkmono, idents = c("2","4","6","7","8"))
+
+nkcells <- subset(nkmono, idents = c("1","3","5"))
+
+# for description of clusters
+table(mono$seurat_clusters, mono$phenotype)
+
+# 
+table(nkcells$seurat_clusters, nkcells$phenotype)
+# keep only relevant markers
+
+my_markers_mono <- c( "CD23", "CD11c", "CD38.1",
+                "CD183-CXCR3", "CD196-CCR6", "CD185-CXCR5", "CD279-PD-1", "CD161", "CD16", "CD14.1", "HLA-DR", "CD69.1", "CD36.1", "CD32", "CD64")
+
+my_markers_nkcells <- c("CD56-NCAM", "CD23", "CD11c",  "CD38.1","CD183-CXCR3", "CD196-CCR6", "CD185-CXCR5", "CD279-PD-1", "CD161", "CD16",  "HLA-DR", "CD69.1", "CD36.1", "CD32", "CD64")
+```
+
+## Create dot plots for each cell type
+
+```{r dot plots for monocyte and Nk cell cluster cell surface marker expression,  include=TRUE}
+
+seurat_dotplot_mono <- DotPlot(mono, features= rownames(mono[["ADT"]]), scale = T, idents = Idents(mono)) +
+  coord_flip()
+
+gg_dat_new_mono <- seurat_dotplot_mono$data %>%
+  arrange(features.plot, id) %>%
+  dplyr::rename(feature = features.plot) %>%
+  mutate(feature_type = ifelse(feature %in% my_markers_mono, "relevant", "non-relevant")) %>%
+  group_by(feature) %>%
+  mutate(scale_sanity_check = scale(avg.exp)[,1]) %>% #double check to see if avg.exp.scaled was by group
+  ungroup()
+
+gg_dat_new_mono %>%
+  ggplot(., aes(scale_sanity_check, avg.exp.scaled)) +
+  geom_point() +
+  stat_smooth(formula = y ~ x, method = "lm") +
+  stat_cor() +
+  theme_bw()
+
+cellsurface_mono <- gg_dat_new_mono %>%
+  mutate(cluster = id) %>%
+  mutate(id = as.integer(id)) %>%                                     # make id numeric for reordering purposes
+  dplyr::filter(!feature %in% c("APC-Streptavidin", "PE-Streptavidin")) %>%
+  dplyr::filter(feature_type == "relevant") %>% # filter only ADT
+  mutate(feature = gsub("\\..*", "", feature)) %>% #subbing out ".1"
+  mutate(feature = fct_reorder2(feature, id, scale_sanity_check)) %>% # this means we want to reorder the feature by id then by expression
+  ggplot(., aes(x = cluster, y = feature)) +
+  geom_point(aes(size = pct.exp, colour = scale_sanity_check)) +
+  scale_color_viridis_b(name = "scaled expression", labels = NULL, n.breaks = 10) + # use viridis, change legend title for expression, remove tick labels to simplify
+  theme_bw() +
+  ggtitle("monocytes") +
+  theme(legend.position = "top", # put legends at bottom
+        legend.box="horizontal",   
+        axis.text.x  = element_text(size = 12, color = "black", angle = 45, hjust = 1),
+        axis.text.y  = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black"),
+        legend.margin=margin()) + 
+  labs(size ='% expression')  + #change legend title for size of bubbles
+  coord_flip() +
+  guides(size = guide_legend(nrow = 1, order = 1))
+
+cellsurface_mono
+
+# NK cells
+
+seurat_dotplot_nkcells <- DotPlot(nkcells, features= rownames(nkcells[["ADT"]]), scale = T, idents = Idents(nkcells)) +
+  coord_flip()
+
+gg_dat_new_nkcells <- seurat_dotplot_nkcells$data %>%
+  arrange(features.plot, id) %>%
+  dplyr::rename(feature = features.plot) %>%
+  mutate(feature_type = ifelse(feature %in% my_markers_nkcells, "relevant", "non-relevant")) %>%
+  group_by(feature) %>%
+  mutate(scale_sanity_check = scale(avg.exp)[,1]) %>% #double check to see if avg.exp.scaled was by group
+  ungroup()
+
+gg_dat_new_nkcells %>%
+  ggplot(., aes(scale_sanity_check, avg.exp.scaled)) +
+  geom_point() +
+  stat_smooth(formula = y ~ x, method = "lm") +
+  stat_cor() +
+  theme_bw()
+
+cellsurface_nkcells <- gg_dat_new_nkcells %>%
+  mutate(cluster = id) %>%
+  mutate(id = as.integer(id)) %>%                                     # make id numeric for reordering purposes
+  dplyr::filter(!feature %in% c("APC-Streptavidin", "PE-Streptavidin")) %>%
+  dplyr::filter(feature_type == "relevant") %>% # filter only ADT
+  mutate(feature = gsub("\\..*", "", feature)) %>% #subbing out ".1"
+  mutate(feature = fct_reorder2(feature, id, scale_sanity_check)) %>% # this means we want to reorder the feature by id then by expression
+  ggplot(., aes(x = cluster, y = feature)) +
+  geom_point(aes(size = pct.exp, colour = scale_sanity_check)) +
+  scale_color_viridis_b(name = "scaled expression", labels = NULL, n.breaks = 10) + # use viridis, change legend title for expression, remove tick labels to simplify
+  theme_bw() +
+  ggtitle("NK cells") +
+  theme(legend.position = "top", # put legends at bottom
+        legend.box="horizontal",   
+        axis.text.x  = element_text(size = 12, color = "black", angle = 45, hjust = 1),
+        axis.text.y  = element_text(size = 12, color = "black"),
+        axis.title = element_text(size = 12, color = "black"),
+        legend.margin=margin()) + 
+  labs(size ='% expression')  + #change legend title for size of bubbles
+  coord_flip() +
+  guides(size = guide_legend(nrow = 1, order = 1))
+
+cellsurface_nkcells
+```
+
+## Assemble dot plots together (as a single row)
+
+```{r ADT bubbleplots, fig.align='center', fig.height= 4.5, fig.width=15}
+
+all_ADT_plot <- plot_grid(cellsurface_mono, cellsurface_nkcells, nrow = 1, rel_heights = 1)
+
+all_ADT_plot 
+
+all_ADT_plot -> Figure5b
+```
+
+# C. boxplots showing canonical NK cell marker genes
+
+```{r boxplots with canonical NK cell marker genes, fig.align='center', fig.height=4, fig.width=2}
+
+# make sure clusters are correctly labeled
+Idents(nkmono)
+
+# select clusters 1,3 and 5
+
+nk.select <- subset(nkmono, idents= c("1", "3", "5"))
+
+DefaultAssay(nk.select) <- "RNA"
+
+seu_featplot <- VlnPlot(nk.select, c("IFNG", "TNF","GZMB", "PRF1"), log = T, layer = "scale.data")
+
+# create new df with all expression values
+
+extracted_dfs <- lapply(seu_featplot, function(single_plot) {
+  return(single_plot@data)
+})
+
+gg_featplot_dat <- data.frame("barcode" = rownames(seu_featplot@data),
+                              "cluster" = seu_featplot@data$ident, 
+                              "IFNG" = seu_featplot[[1]]@data$IFNG,
+                              "TNF" =seu_featplot[[2]]@data$TNF,
+                              "GZMB" = seu_featplot[[3]]@data$GZMB, 
+                              "PRF1" = seu_featplot[[4]]@data$PRF1) %>%
+  pivot_longer(cols = -c(barcode, cluster), 
+    names_to = "gene", 
+    values_to = "expression") %>%
+  ungroup() %>%
+  group_by(gene) %>%
+  mutate(pct.max.exp = expression/max(expression)) %>%
+   mutate(scaled_expression = scale(expression)[,1]) %>%
+     ungroup()
+
+mycomparisons <- list(c("1", "3"), c("1", "5"), c("3", "5"))
+symnum.args <- list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))
+
+gg_vlnplot <- ggplot(gg_featplot_dat, aes(x = cluster, y = expression, colour = cluster)) +
+  ggbeeswarm::geom_quasirandom(width = 0.25, size=0.1, alpha=0.6) +
+  geom_boxplot(width = 0.5, color = "gray20", alpha = 0, stroke=0.005) +
+  theme_bw() +
+  theme(legend.position = "none",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        legend.text = element_blank(),
+        plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+        strip.text = element_text(size = 11, color = "black", face = "italic"),#,
+        strip.background = element_blank()) +
+  ylab("scaled expression") +
+  scale_color_manual(values= c("1" = new_colors_clusters[[1]],
+                               "3" = new_colors_clusters[[4]],
+                               "5" = new_colors_clusters[[5]])) +
+  facet_wrap(~ factor(gene, levels = c("IFNG","TNF", "GZMB", "PRF1")), ncol=1, strip.position = "right") +
+   scale_y_continuous(expand = expansion(mult = c(0.2, 0.4))) +
+  stat_compare_means(comparisons = mycomparisons, symnum.args = symnum.args,
+                     method = "wilcox", show.legend = FALSE, size = 1.7)
+
+gg_vlnplot
+
+gg_vlnplot -> figure5c
+
+```
+
+
+# based on newer analysis of 82K object, extract the exact C4 and C7 population frequnencies of total monocytes and correlate
+
+```{r} 
+
+# from google drive
+
+temp<- tempfile(fileext = ".csv")
+dl <- drive_download(
+as_id("1guhnGW0SwsHFHP8QoHRcuVIxJNx0c7X9"), path = temp, overwrite = TRUE)
+monoc4_c7 <- read.table(file = dl$local_path,  sep=",", header = T)
+
+monoc4_c7 <- read.table("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/CD36 monocyte immunophenotyping/15 sample experiment/ex vivo/Outs from FlowJo analysis/C4 and C7 populations CITEseq.csv", sep=",", header = T) %>%
+  subset(File.Name %nin% c("Mean", "Median", "Max", "SD", "CV")) %>%
+  mutate(subj_id = gsub("kali0", "", File.Name)) %>%
+  mutate(subj_id = gsub(".fcs", "", subj_id)) %>%
+  #janitor::clean_names() %>%
+  rename_with(~ "C4", .cols = 2) %>%
+  rename_with(~ "C7", .cols = 3) %>%
+  dplyr::select(-File.Name) %>%
+  mutate(C4= 100*C4) %>%
+  mutate(C7= 100*C7)
+
+cor.df <- merge(monoc4_c7, clinicaldata, .by = "subj_id")
+
+# with time to first 
+C4_tte <- cor.test(cor.df$C4, cor.df$FIRST)
+C7_tte <- cor.test(cor.df$C7, cor.df$FIRST)
+
+# with first parasite density
+C4_density <- cor.test(cor.df$C4, cor.df$ParasiteDensity)
+C7_density <- cor.test(cor.df$C7, cor.df$ParasiteDensity)
+
+# on C4 pct of monocytes
+
+r_val <- round(C4_tte$estimate, 2)
+p_val <- format.pval(C4_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scatterplot
+C4_tte_plot <- ggplot(cor.df, aes(x = C4, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(cor.df$C4) * 0.6, 
+    y = max(cor.df$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+
+# on C7 pct of monocytes
+
+r_val <- round(C7_tte$estimate, 2)
+p_val <- format.pval(C7_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scatterplot
+C7_tte_plot <- ggplot(cor.df, aes(x = C7, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(cor.df$C4) * 0.6, 
+    y = max(cor.df$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+
+c4_7.tteplots <- plot_grid(C4_tte_plot, C7_tte_plot, 
+                           nrow=1, 
+                           labels = c( "% C4", "% C7"))
+
+c4_7.tteplots
+
+
+# On parasite density at first infection
+
+
+
+# on C4
+r_val <- round(C4_density$estimate, 2)
+p_val <- format.pval(C4_density$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scapcrrplot
+C4_density_plot <- ggplot(cor.df, aes(x = C4, y = ParasiteDensity)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(cor.df$C4) * 0.6, 
+    y = max(cor.df$ParasiteDensity) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+
+# on pct negative (important, since these were only seen in Malian children and not in US donors)
+
+r_val <- round(C7_density$estimate, 2)
+p_val <- format.pval(C7_density$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scapcrrplot
+C7_density_plot <- ggplot(cor.df, aes(x = C7, y = ParasiteDensity)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(cor.df$C4) * 0.6, 
+    y = max(cor.df$ParasiteDensity) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+mono.densityplots <- plot_grid(C4_density_plot, C7_density_plot, 
+                               nrow=1, 
+                               labels = c("% C4 of monocytes", "% C7 of monocytes"))
+mono.densityplots
+
+
+```
+
+# Plot NK cell immunphenotyping data
+
+```{r NK cell flow data, include=TRUE}
+
+# From google drive
+
+temp<- tempfile(fileext = ".csv")
+dl <- drive_download(
+as_id("1W7v2MOTlhumWUeLgv3u9OZGSTRImQOvL"), path = temp, overwrite = TRUE)
+nkc3_c5_pct <- read.table(file = dl$local_path,  sep=",", header = T)
+
+nkc3_c5_pct <- read.table("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/CD36 monocyte immunophenotyping/15 sample experiment/ex vivo/Outs from FlowJo analysis/CD11c hi NK on C4 and C5.csv", sep=",", header = T) %>%
+  subset(File.Name %nin% c("Mean", "Median", "Max", "SD", "CV")) %>%
+  mutate(subj_id = gsub("kali0", "", File.Name)) %>%
+  mutate(subj_id = gsub(".fcs", "", subj_id)) %>%
+  rename_with(~ "C3_pct", .cols = 2) %>% # change cluster annotations based on 82K new data
+  rename_with(~ "C5_pct", .cols = 3) %>% #change cluster annotations based on 82K new data
+  mutate(C5_pct= C5_pct*100) %>% 
+  mutate(C3_pct= C3_pct*100) %>%
+  #dplyr::filter(subj_id %nin% c(590, 603, 669)) %>%
+  dplyr::select(-File.Name)
+
+head(nkc3_c5_pct)
+
+nkc3_c5.nk_cor <- merge(nkc3_c5_pct, clinicaldata, .by = "subj_id")
+
+boxplot_comps <- nkc3_c5_pct %>%
+  pivot_longer(cols = c(C3_pct, C5_pct), names_to = "cluster", values_to = "pct_nk") %>%
+  ggplot(., aes(x= cluster, y= pct_nk)) +
+  ggtitle("CD38+CD11c-hi")+
+  geom_boxplot() +
+  ggbeeswarm::geom_quasirandom()
+
+# Correlate C3 pcts
+
+nkc3_c5.nk_tte <- cor.test(nkc3_c5.nk_cor$C3_pct, nkc3_c5.nk_cor$FIRST, method = "pearson")
+nkc3_c5.nk_parasite.density <- cor.test(nkc3_c5.nk_cor$C3_pct, nkc3_c5.nk_cor$ParasiteDensity, method = "pearson")
+
+# on abundance
+r_val <- round(nkc3_c5.nk_tte$estimate, 2)
+p_val <- format.pval(nkc3_c5.nk_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scatterplot
+nkc3.nk_tte_plot <- ggplot(nkc3_c5.nk_cor, aes(x = C3_pct, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(nkc3_c5.nk_cor$C3_pct) * 0.6, 
+    y = max(nkc3_c5.nk_cor$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+# on parasite density
+
+r_val <- round(nkc3_c5.nk_parasite.density$estimate, 2)
+p_val <- format.pval(nkc3_c5.nk_parasite.density$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scatterplot
+nkc3.nk_parasite.density_plot <- ggplot(nkc3_c5.nk_cor, aes(x = C3_pct, y = ParasiteDensity)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(nkc3_c5.nk_cor$C3_pct) * 0.6, 
+    y = max(nkc3_c5.nk_cor$ParasiteDensity) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+# In C5
+
+nkc5.nk_tte <- cor.test(nkc3_c5.nk_cor$C5_pct, nkc3_c5.nk_cor$FIRST, method = "pearson")
+nkc5.nk_parasite.density <- cor.test(nkc3_c5.nk_cor$C5_pct, nkc3_c5.nk_cor$ParasiteDensity, method = "pearson")
+
+# on abundance
+r_val <- round(nkc5.nk_tte$estimate, 2)
+p_val <- format.pval(nkc5.nk_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scatterplot
+nkc5.nk_tte_plot <- ggplot(nkc3_c5.nk_cor, aes(x = C5_pct, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(nkc3_c5.nk_cor$C5_pct) * 0.6, 
+    y = max(nkc3_c5.nk_cor$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+# on parasite density
+
+r_val <- round(nkc5.nk_parasite.density$estimate, 2)
+p_val <- format.pval(nkc5.nk_parasite.density$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+# 3. Build the scatterplot
+nkc5.nk_parasite.density_plot <- ggplot(nkc3_c5.nk_cor, aes(x = C5_pct, y = ParasiteDensity)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(nkc3_c5.nk_cor$C5_pct) * 0.6, 
+    y = max(nkc3_c5.nk_cor$ParasiteDensity) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() 
+
+nkc5.nk_corr_plots <- plot_grid(nkc5.nk_tte_plot, nkc5.nk_parasite.density_plot, nrow = 1, labels = c('time to first PfPCR positive test', 'log10(parasite density) at first Pf infection'))
+
+
+```
+
+
+# Let's keep only relevant plots from flow data
+
+```{r show relevant flow olots 5e, include=TRUE, fig.align='center', fig.height=4, fig.width=13}
+
+# mono
+r_val <- round(C4_tte$estimate, 2)
+p_val <- format.pval(C4_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+C4_tte_plot <- ggplot(cor.df, aes(x = C4, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(cor.df$C4) * 0.6, 
+    y = max(cor.df$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw()  +
+  ggtitle("% C4 monocytes")
+
+r_val <- round(C7_tte$estimate, 2)
+p_val <- format.pval(C7_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+
+C7_tte_plot <- ggplot(cor.df, aes(x = C7, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(cor.df$C4) * 0.6, 
+    y = max(cor.df$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() +
+  ggtitle("% C7 monocytes")
+
+# NK cells
+
+r_val <- round(nkc3_c5.nk_tte$estimate, 2)
+p_val <- format.pval(nkc3_c5.nk_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+nkc3.nk_tte_plot <- ggplot(nkc3_c5.nk_cor, aes(x = C3_pct, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(nkc3_c5.nk_cor$C3_pct) * 0.6, 
+    y = max(nkc3_c5.nk_cor$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() +
+  ggtitle("% CD11c-hi NK cells of CD56brightCD16- NK cells")
+
+r_val <- round(nkc5.nk_tte$estimate, 2)
+p_val <- format.pval(nkc5.nk_tte$p.value, digits = 3) 
+label_text <- paste0("r = ", r_val, ", p = ", p_val)
+
+nkc5.nk_tte_plot <- ggplot(nkc3_c5.nk_cor, aes(x = C5_pct, y = FIRST)) +
+  geom_point(color = "#2b5c8f", size = 2.5, alpha = 0.7) +  
+  geom_smooth(method = "lm", color = "#d95f02", fill = "#cbd5e1") + 
+  annotate(
+    "text", 
+    x = max(nkc3_c5.nk_cor$C5_pct) * 0.6, 
+    y = max(nkc3_c5.nk_cor$FIRST) * 0.9, 
+    label = label_text, 
+    color = "black", 
+    size = 5
+  ) + 
+  theme_bw() +
+  ggtitle("% CD11c-hi NK cells of CD56dimCD16+ NK cells")
+
+
+flowplot_panel <- plot_grid(C4_tte_plot, C7_tte_plot,  nkc3.nk_tte_plot, nkc5.nk_tte_plot , nrow = 1)
+
+flowplot_panel 
+
+flowplot_panel -> figure5d
+```
+
+
+# examine the expression of IP-9 aparasitemic on NK and mono
+
+# Figure 5e
+
+```{r fig 5 d tuan, fig.align='center', fig.width=11, fig.height=3.5}
+
+# create groups
+group1 <- c("ICAM1", "ITGAM")
+group2 <- c("NRG1","ERBB2")
+group3 <- c("TNF", "TNFRSF1A", "TNFRSF1B")
+group4 <- c("PVR", "CD226")
+group5 <- c("TIMP1", "CD63")
+group6 <- c("ULBP2", "KLRK1")
+group7 <- c( "PPBP","CXCL1","CXCL2","CXCL3","CXCL5","CXCL8","CXCR1", "CXCR2")
+group8 <- c("IL18", "IL18R1")
+group9 <- c("TGFB2", "TGFBR1", "TGFBR3")
+group10 <- c("BMP2", "BMP6", "BMPR1A")
+
+# check to see if group members are unique
+all(!duplicated(c(group1, group2, group3, group4, group5, group6, group7, group8)))
+
+
+ip9_genes <- c(group1, group2, group3, group4, group5, group6, group7, group8, group9, group10)
+
+
+ligands <- c("ICAM1", "NRG1", "TNF", "PVR", "TIMP1", "ULBP2", "PPBP", "CXCL1", "CXCL8", "CXCL2", "CXCL3", "CXCL5", "IL18", "TGFB2", "BMP2", "BMP6")
+
+# keep aparasitemic NK and monocyte clusters
+
+nkmono_ipclust <- subset(nkmono, idents = c("3","4","5", "7"))
+
+nkmono_ipclust <- RenameIdents(nkmono_ipclust, "3" = "3 (NK)", "4" = "4 (mono)", "5" = "5 (NK)","7" =  "7 (mono)")
+
+# plot as dotplot
+
+DefaultAssay(nkmono_ipclust) <- "RNA"
+
+seurat_dotplot_rna <- DotPlot(nkmono_ipclust, features= ip9_genes, scale = T) +
+  coord_flip()
+
+gg_dat_new_rna <- seurat_dotplot_rna$data %>%
+  arrange(features.plot, id) %>%
+  dplyr::rename(feature = features.plot) %>%
+  group_by(feature) %>%
+  mutate(scale_sanity_check = scale(avg.exp)[,1]) %>% #double check to see if avg.exp.scaled was by group
+  ungroup() %>%
+  mutate(ip_pairmate = ifelse(feature %in% ligands, "ligand", "receptor")) 
+
+
+# make new dummy variable for sorting groups based on member features (for faceting)
+gg_dat_new_rna <- gg_dat_new_rna %>%
+  mutate(variable_to_order_groups = case_when(
+    feature %in% group1 ~ 1,
+    feature %in% group2 ~ 2,
+    feature %in% group3 ~ 3,
+    feature %in% group4 ~ 4,
+    feature %in% group5 ~ 5,
+    feature %in% group6 ~ 6,
+    feature %in% group7 ~ 7,
+    feature %in% group8 ~ 8,
+    feature %in% group9 ~ 9,
+    feature %in% group10 ~ 10)) %>%
+  # adding an additional group names just so that the facets have names (instead of only numbers)
+  mutate(group_names = case_when(
+    feature %in% group1 ~ "Group 1",
+    feature %in% group2 ~ "Group 2",
+    feature %in% group3 ~ "Group 3",
+    feature %in% group4 ~ "Group 4",
+    feature %in% group5 ~ "Group 5",
+    feature %in% group6 ~ "Group 6",
+    feature %in% group7 ~ "Group 7",
+    feature %in% group8 ~ "Group 8",
+    feature %in% group9 ~ "Group 9",
+    feature %in% group10 ~ "Group 10"))
+
+# make second new dummy variable for sorting features based on whether they are receptors or ligands, use 1 for receptor, since you want those to go first
+
+gg_dat_new_rna <- gg_dat_new_rna %>%
+  mutate(variable_to_order_features_within_group = case_when(
+    ip_pairmate == "receptor" ~ 1,
+    ip_pairmate == "ligand" ~ 2))
+
+# now can plot in as faceted plot (no longer need to subset)
+
+
+dotplot_5d_dat <- gg_dat_new_rna %>%
+  #dplyr::filter(group_names != "Group 5") %>%
+  droplevels() %>%
+  mutate(feature = ifelse(ip_pairmate == "receptor", paste0(feature, "*"),  paste0(feature, ""))) %>%
+  mutate(feature = fct_reorder2(feature, variable_to_order_groups, variable_to_order_features_within_group, .desc = TRUE)) %>%
+  arrange(variable_to_order_groups, variable_to_order_features_within_group) 
+
+group1 <- c("ICAM1", "ITGAM")
+group2 <- c("NRG1","ERBB2")
+group3 <- c("TNF", "TNFRSF1A", "TNFRSF1B")
+group4 <- c("PVR", "CD226")
+group5 <- c("TIMP1", "CD63")
+group6 <- c("ULBP2", "KLRK1")
+group7 <- c( "PPBP","CXCL1","CXCL2","CXCL3","CXCL5","CXCL8","CXCR1", "CXCR2")
+group8 <- c("IL18", "IL18R1")
+group9 <- c("TGFB2", "TGFBR1", "TGFBR3")
+group10 <- c("BMP2", "BMP6", "BMPR1A")
+
+
+dotplot_5e_tuan <- dotplot_5d_dat %>%
+  ggplot(., aes(y = factor(id, levels= c("4 (mono)", "7 (mono)", "3 (NK)", "5 (NK)")), x = feature)) +
+  geom_point(aes(size = pct.exp, colour = scale_sanity_check), alpha=0.7) +
+  #geom_point(aes(fill = ip_pairmate), alpha = 0, show.legend = TRUE) +
+  scale_y_discrete(limits=rev) + # makes small cluster number at top
+  scale_x_discrete(limits=rev) + 
+  #scale_fill_manual(values = custom_colors, name = "interaction partner", guide = "legend") +
+  scale_color_viridis_b(name = "scaled expression", labels = NULL) + # use viridis, change legend title for expression, remove tick labels to simplify
+  theme_bw() +
+  theme(legend.position = "bottom", # put legends at bottom
+        legend.box="horizontal",   
+        axis.text.x  = element_text(size = 14, color = "black", angle = 45, hjust = 1),
+        axis.text.y  = element_text(size = 14, color = "black"),
+        axis.title = element_blank(),
+        legend.margin=margin()) + 
+  labs(size ='% expression') + 
+  xlab("cluster") + 
+  #guides(fill = guide_legend(override.aes = list(alpha = 0.8, shape=21), nrow = 1)) +
+  facet_grid(~group_names, space = "free", scale = "free") +
+  labs(caption = "receptors indicated by *") +
+  theme(plot.caption.position = "plot",
+        plot.caption = element_text(hjust = 0.1, vjust = 21, size = 11)) 
+
+dotplot_5e_tuan
+```
+
+```{r assemble figure, fig.height=13, fig.width=13, fig.align='center'}
+
+fig5ab_toptworow <- plot_grid(Figure5a,Figure5b, nrow = 2, align = "h", labels = c('a', 'b'))
+
+fig5cd_middrow <- plot_grid(figure5c, figure5d, nrow = 1, rel_widths = c(3,13), labels = c('c', 'd'))
+
+figure5 <- plot_grid(fig5ab_toptworow, fig5cd_middrow, dotplot_5e_tuan, rel_heights = c(9, 4, 4), nrow = 3, align = "hv", labels = c('', '', 'e'))
+
+figure5
+```
+```{r save fig 5, fig.align='center', fig.height=13, fig.width= 13}
+
+ggsave(paste0(figdir, "Figure 5 NK and mono characterization.pdf"), figure5, units = "in", width = 13, height  = 13, bg = "white")
+
+ggsave(paste0(figdir, "Figure 5 NK and mono characterization.png"), figure5, units = "in", width = 13, height  = 13, bg = "white", dpi = 300)
+
+```
+

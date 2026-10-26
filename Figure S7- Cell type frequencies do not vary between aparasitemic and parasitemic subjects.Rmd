@@ -1,0 +1,193 @@
+---
+title: 'Figure S7: Cell type frequencies do not vary between aparasitemic and parasitemic
+  subjects'
+author: "Prasida Holla"
+date: "2026-10-23"
+output:   
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(RColorBrewer)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(dplyr)
+library(ggplot2)
+library(scriabin)
+library(ggalluvial)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# Figure S7: cell type frequency assessment across aparasitemic and parasitemic children
+
+```{r cell type frequency assessment, include=TRUE, message=FALSE, warning=FALSE, fig.align='center',fig.height=12, fig.width=16}
+
+#import the 82k object
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1Z1gGEfNz7R-qYXizY7Sg6mzJxJkEm6Ti"), path = temp, overwrite = TRUE)
+refmapped.all<-readRDS(file = dl$local_path)
+
+refmapped.all<-subset(refmapped.all, 
+                      subset = predicted.celltype.l2 %in% 
+                        c("B intermediate",
+                             "B memory",
+                             "B naive",
+                             "Plasmablast",
+                             "CD14 Mono",
+                             "CD16 Mono",
+                             "CD4 Naive",
+                             "CD4 TCM",
+                             "CD8 Naive",
+                             "CD8 TCM",
+                             "CD8 TEM",
+                             "cDC1",
+                             "cDC2",
+                             "pDC",
+                             "gdT",
+                             "ILC",
+                            "MAIT",
+                           "NK",
+                           "NK_CD56bright",
+                           "Treg"
+                           ))
+
+# Extract metadata from total object
+all_metadat<-refmapped.all@meta.data
+
+cellfreq<-all_metadat%>%
+     group_by(subject_id, phenotype, predicted.celltype.l2, .drop = FALSE) %>%
+     summarise(n = n()) %>%
+     mutate(freq = 100*(n / sum(n)))
+
+# create paring
+my_comparisons <- list("pair_1" = c("kali0666", "kali0650"), 
+                       "pair_2" = c("kali0647", "kali0651"), 
+                       #"pair_3" = c("kali0613", "kali0612"), 
+                       "pair_4" = c("kali0618", "kali0628"), 
+                       "pair_5" = c("kali0631", "kali0600"), 
+                       "pair_6" = c("kali0626", "kali0640"), 
+                       "pair_7" = c("kali0636", "kali0604"), 
+                       "pair_8" = c("kali0585", "kali0593")) 
+my_comparisons <- bind_rows(my_comparisons, .id = "pairing") 
+my_comparisons <- t(my_comparisons) %>% 
+                      as.data.frame()
+my_comparisons<-my_comparisons%>%
+  rownames_to_column(., var="pairing")%>%
+pivot_longer(!pairing, values_to = "subject_id")
+
+cellfreq_pairing<-cellfreq%>%  left_join(., my_comparisons,
+by = "subject_id")
+cellfreq_pairing<-cellfreq_pairing[,-c(1,4,7)]
+
+cellfreq_pairing<-cellfreq_pairing%>%
+  pivot_wider(.,names_from = "phenotype", values_from = freq)
+
+#replace NA with zero for unrepresented samples
+cellfreq_pairing[is.na(cellfreq_pairing)] <- 0
+
+# For plotting
+basefont <- "sans"
+basefontsize <- 14
+pvalfontsize <- 6
+symnum.args <- list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))
+gs.pal <- colorRampPalette(c("blue","red"),bias=.1,space="rgb")
+
+#Plot 
+cellfreq_paired_plot <- cellfreq_pairing%>%
+ggpaired(., cond1 = "Aparasitemic", cond2 = "Parasitemic", id = "pairing",
+color = "gray20",
+fill = "condition",
+line.color = "gray",
+line.size = 0.4,
+palette = c( "#3B9AB2", "#F21A00")) +
+labs(y = "Percentage of total") +
+stat_compare_means(method = "wilcox.test", paired = TRUE,
+label.x.npc = 0.5,
+aes(label = paste0("p = ", after_stat(p.format)))) +
+theme_bw() +
+xlab("class (outcome)") +
+ylab("Percentage of total") +
+facet_wrap(~predicted.celltype.l2, scales = "free_y") +
+theme(axis.text.y = element_text(size=14),
+axis.text.x = element_text(size=14),
+axis.title.y  = element_text(size=14),
+axis.title.x  = element_text(size=14),
+panel.background = element_blank(),
+panel.grid.major = element_blank(),
+panel.grid.minor = element_blank(),
+panel.border = element_rect(colour = "darkgrey", fill=NA, size=1),
+plot.margin=unit(c(0.01,0.01,0.01,0.01), "null"))+
+grids(linetype = "dashed") +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.2)))
+
+cellfreq_paired_plot
+```
+
+
+
+
+
+```{r save fig_s7, fig.width=14, fig.height=8}
+
+ggsave(paste0(figdir, "Figure S7- Cell type frequencies do not vary between aparasitemic and parasitemic
+  subjects.pdf"), cellfreq_paired_plot, units = "in", height = 12, width = 16, bg = "white")
+
+ggsave(paste0(figdir, "Figure S7- Cell type frequencies do not vary between aparasitemic and parasitemic
+  subjects.png"), cellfreq_paired_plot, units = "in", height = 12, width = 16, bg = "white", dpi = 300)
+```
