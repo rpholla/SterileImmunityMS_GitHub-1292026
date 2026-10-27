@@ -1,0 +1,636 @@
+---
+title: "Figure 6 in vitro NK and mono changes"
+author: "Prasida Holla"
+date: "2026-03-01"
+output:
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(RColorBrewer)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(dplyr)
+library(ggplot2)
+#library(scriabin)
+library(ggalluvial)
+library(ggplotify)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Clean Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# A. Schematic diagram of in vitro stim experiment: made in Biorender
+
+Read in dummy png file here.
+
+```{r read in dummy panel, fig.align='center', fig.height=4, fig.width=5.85}
+
+#read in dummy model panel
+fig6apng <- png::readPNG("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/Figures/Figure 6a in vitro cell stim study design.png")
+Figure6a_gg <- ggplot() + annotation_custom(grid::rasterGrob(fig6apng,
+                                                         width=ggplot2::unit(1,"npc"),
+                                                         height=ggplot2::unit(1,"npc")),
+                                        -Inf, Inf, -Inf, Inf) +
+  theme(
+  plot.margin = margin(0,0,0,0, "cm"), # Top, Right, Bottom, Left margins (1 cm all around)
+  plot.background = element_rect(fill = "white", color = "white"))
+
+Figure6a_gg 
+```
+
+# B. uMAP plot of 59K cells, split by urbc/irbc
+
+```{r umap plots of in vitro data, include=TRUE, message=FALSE, warning=FALSE}
+#Import the reference mapped, subsampled 50K in vitro object
+
+refmapped.invitro <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ in vitro samples integrated and reference mapped 59k non downsampled object 27May 2026.rds")
+
+all.split <- SplitObject(refmapped.invitro, split.by ="phenotype")
+all_apara <- all.split$aparasitemic
+apara_split <- SplitObject(all_apara, split.by = "stim")
+
+all_para <- all.split$parasitemic
+para_split <- SplitObject(all_para, split.by = "stim")
+```
+
+```{r prepare pf stim umaps, fig.align='center', fig.height=4, fig.width=7.5}
+#plot umap of all cells, colored by celltype
+plot_umap_allcells <- DimPlot(refmapped.invitro,
+                             reduction = "ref.umap",
+                             group.by = "predicted.celltype.l2", 
+                             label = TRUE, 
+                             label.size = 4, 
+                             repel = TRUE,
+                             pt.size = 0.03, 
+                             raster = F, combine = FALSE)[[1]]$data %>%
+  mutate(class = "all cells") %>%
+  mutate(treatment = "all stimulation")
+
+plot_umap_apara_urbc <- DimPlot(apara_split$urbc,
+                               reduction = "ref.umap",
+                               group.by = "predicted.celltype.l2", 
+                               label = TRUE, 
+                               label.size = 4, 
+                               repel = TRUE,
+                               pt.size = 0.03, 
+                               raster = F, combine = FALSE)[[1]]$data %>%
+  mutate(class = "aparasitemic") %>%
+  mutate(treatment = "uRBC")
+
+plot_umap_apara_irbc <- DimPlot(apara_split$irbc,
+                               reduction = "ref.umap",
+                               group.by = "predicted.celltype.l2", 
+                               label = TRUE, 
+                               label.size = 4, 
+                               repel = TRUE,
+                               pt.size = 0.03, 
+                               raster = F, combine = FALSE)[[1]]$data %>%
+  mutate(class = "aparasitemic") %>%
+  mutate(treatment = "PfRBC")
+
+plot_umap_para_urbc <- DimPlot(para_split$urbc,
+                               reduction = "ref.umap",
+                               group.by = "predicted.celltype.l2", 
+                               label = TRUE, 
+                               label.size = 4, 
+                               repel = TRUE,
+                               pt.size = 0.03, 
+                               raster = F, combine = FALSE)[[1]]$data %>%
+  mutate(class = "parasitemic") %>%
+  mutate(treatment = "uRBC")
+
+plot_umap_para_irbc <- DimPlot(para_split$irbc,
+                               reduction = "ref.umap",
+                               group.by = "predicted.celltype.l2", 
+                               label = TRUE, 
+                               label.size = 4, 
+                               repel = TRUE,
+                               pt.size = 0.03, 
+                               raster = F, combine = FALSE)[[1]]$data %>%
+  mutate(class = "parasitemic") %>%
+  mutate(treatment = "PfRBC")
+
+plot_umap_all <- bind_rows(plot_umap_apara_urbc, plot_umap_apara_irbc, plot_umap_para_urbc, plot_umap_para_irbc) %>%
+  mutate(treatment = factor(treatment, levels = c("uRBC", "PfRBC"))) %>%
+  mutate(class = factor(class, levels = c("parasitemic", "aparasitemic")))
+
+strip <- strip_themed(background_x = elem_list_rect(fill = c("orchid1", "orchid3", alpha = 0.6)),
+                             background_y = elem_list_rect(fill = c("#e41a1c", "#58a4cb", alpha = 0.6)))
+
+cells_to_label <- c("CD14 Mono", "CD14 Mono", "B intermediate", "B memory", "B naive", "pDC", "cDC2")
+new_colors = colorRampPalette(brewer.pal(10,"Spectral"))(length(unique(plot_umap_all$predicted.celltype.l2)))
+cells_to_label <- c("CD14 Mono", "CD16 Mono")
+find_center <- function(my_vector) my_vector[ceiling(length(my_vector)/2)]
+
+all_umap_plot <- plot_umap_all %>%
+  group_by(class, treatment, predicted.celltype.l2) %>%
+  mutate(midval_umap1_by_celltype = find_center(UMAP_1)) %>%
+  mutate(midval_umap2_by_celltype = find_center(UMAP_2)) %>%
+  mutate(minval_umap1_by_celltype = min(UMAP_1)) %>%
+  mutate(minval_umap2_by_celltype = min(UMAP_2)) %>%
+  mutate(maxval_umap1_by_celltype = max(UMAP_1)) %>%
+  mutate(maxval_umap2_by_celltype = max(UMAP_2)) %>%
+  mutate(cell_label = as.character(predicted.celltype.l2)) %>%
+  mutate(label_center = ifelse(predicted.celltype.l2 %in% cells_to_label & UMAP_1 == midval_umap1_by_celltype, cell_label, "")) %>%
+  mutate(label = ifelse(predicted.celltype.l2 %in% c("CD14 Mono", "CD16 Mono", "NK", "NK_CD56bright") & UMAP_2 == midval_umap2_by_celltype, cell_label, "")) %>%
+  #mutate(label = ifelse(predicted.celltype.l2 %in% c("CD16 Mono" & UMAP_2 == minval_umap2_by_celltype, cell_label, label)) %>%
+  ungroup() %>%
+  ggplot(., aes(x = UMAP_1, y = UMAP_2, color = predicted.celltype.l2)) +
+  geom_point(size = 0.5) +
+  scale_color_manual(values = new_colors) +
+  geom_text(aes(label = label), color = "black", size = 2.75) +
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
+  theme_bw() +
+  theme(legend.position = "left",
+        legend.margin = margin(),
+        legend.spacing.x = unit(0.05, "cm"),
+        legend.key.size = unit(1, "lines"),
+        legend.text = element_text(size = 7),
+        plot.margin=unit(c(0.2,0.2,0.2,0.2), "null"),
+        strip.text = element_text(size = 14)) +
+  facet_grid2(rows = vars(class), cols = vars(treatment), strip = strip) +
+  guides(colour = guide_legend(title="cell type",
+                               override.aes = list(size=2.5)))
+
+all_umap_plot -> Figure6b
+
+
+all_umap_plot
+```
+
+# C: GSEA results by MAST
+
+# Plot these results 
+
+```{r arrange GSEA of irbc vs urbc , include=TRUE, message=FALSE, warning=FALSE, fig.height=4, fig.width=4}
+
+# import MAST DGE lists
+
+mast_dge_gsea <- readRDS("/Users/rholla/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/GSEA/mono and NK GSEA from MAST of 59k non downsampled obj.rds") %>%
+  bind_rows(., .id = "celltype") %>%
+  mutate(class = "aparasitemic")
+
+apara_mast <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/aparasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_aparasitemic_notdownsampled_54.5k_apara_invitro.rds") %>%
+  bind_rows(., .id = "celltype") %>%
+  mutate(class = "aparasitemic")
+
+para_mast <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/parasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_parasitemic_notdownsampled_54.5k_apara_invitro.rds") %>%
+  bind_rows(., .id = "celltype") %>%
+  mutate(class = "parasitemic")
+
+mast_dge_gsea <- rbind(apara_mast, para_mast)
+
+hall_invitro_all_celltypes <- mast_dge_gsea %>%
+                      dplyr::filter(., grepl("MSigDB_Hallmark_v7.4", module_type))
+
+
+basetextsize <- 9
+myfont <- "sans"
+bubble_max_size <- 8
+
+# Add Scale_y_limits to include aparasitemic and show no differential enrichment there
+invitro_irbc_plot <- hall_invitro_all_celltypes %>%
+  mutate(comparison = factor(class, levels=c("aparasitemic", "parasitemic"), labels = c("Δ aparasitemic","Δ parasitemic"))) %>%
+  dplyr::filter(padj < 0.05) %>%
+  mutate(pathway = gsub("INTERFERON", "IFN", pathway)) %>%
+  mutate(pathway = gsub("ALPHA", "α", pathway)) %>%
+  mutate(pathway = gsub("BETA", "β", pathway)) %>%
+  mutate(pathway = gsub("GAMMA", "γ", pathway)) %>%
+  ggplot(., aes(x = comparison, y= pathway, fill = NES)) +
+  geom_point(aes(size=neglogpadj), shape=21, stroke = 0.25, alpha = 0.6, show.legend=TRUE) +
+  scale_size_area(name = expression(-log[10]~adj.~p~value), max_size = bubble_max_size) +
+  scale_fill_gradient2(low = "mediumblue",
+                       mid = "white",
+                       high = "red2",
+                       name = "up uRBC    up PfRBC",
+                       limits = c(-3,3.2),
+                       breaks = c(-3,-1.5, 0, 1.5, 3.2)) +
+  hrbrthemes::theme_ipsum_es(base_family = myfont, base_size = basetextsize) +
+  #ylab("pathway") +
+  theme(plot.title = element_blank(),
+        #axis.title.x = element_blank(),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(size = 8),
+        strip.background = element_blank(),
+        legend.position = "bottom",
+        legend.title.position = "top",
+        legend.justification = "right",
+        legend.box="horizontal",
+        legend.margin=margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        plot.margin=unit(c(0.2,0.2,0.2,0.2), "null"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1)) +
+  scale_x_discrete(drop = FALSE) +
+  coord_cartesian(clip = 'off') +
+  facet_grid2(cols = NULL, rows = vars(celltype), scales="free_y", independent = "none", space="free", shrink=TRUE)
+
+invitro_irbc_plot -> Figure6c
+
+invitro_irbc_plot
+```
+
+# D: pseudotime trajectory analysis ok monocytes. Here, we drop NK cells becuase we do not see a strong response in them
+
+# read in data for monos
+
+```{r read in trajwctory data, include=TRUE}
+
+mono_in <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ monocytes in vitro from 59k non downsampled object with pseudotime traj mapped May 2026.rds")
+
+cds_pr_test_mon<- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ monocytes cds_pr_test along trajectory in vitro from 59k non downsampled.rds")
+
+
+```
+
+# Plot pseudotime trajectories for NK cells and monocytes in vitro
+
+```{r pseudotime trajectory of monocytes, include=TRUE, message=FALSE, warning=FALSE, fig.align='center', fig.width=3.85, fig.height=3.5}
+# monocytes
+
+
+Idents(mono_in) <- mono_in$phenotype_stim
+apucells <- WhichCells(mono_in, idents = "aparasitemic_urbc")
+apicells <- WhichCells(mono_in, idents = "aparasitemic_irbc")
+pucells <- WhichCells(mono_in, idents = "parasitemic_urbc")
+picells <- WhichCells(mono_in, idents = "parasitemic_irbc")
+
+apu_traj_dat <- FeaturePlot(mono_in, "log_pseudo_traj", pt.size = 3.5, reduction = "monocle.umap", keep.scale = NULL, cells = apucells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+  mutate(class = "aparasitemic") %>%
+  mutate(treatment = "uRBC")
+
+api_traj_dat <- FeaturePlot(mono_in, "log_pseudo_traj", pt.size = 3.5, reduction = "monocle.umap", keep.scale = NULL, cells = apicells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+  mutate(class = "aparasitemic") %>%
+  mutate(treatment = "PfRBC")
+
+pu_traj_dat <- FeaturePlot(mono_in, "log_pseudo_traj", pt.size = 3.5, reduction = "monocle.umap", keep.scale = NULL, cells = pucells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+  mutate(class = "parasitemic") %>%
+  mutate(treatment = "uRBC")
+
+pi_traj_dat <- FeaturePlot(mono_in, "log_pseudo_traj", pt.size = 3.5, reduction = "monocle.umap", keep.scale = NULL, cells = picells, alpha = 0.45, combine = FALSE)[[1]]$data %>%
+  mutate(class = "parasitemic") %>%
+  mutate(treatment = "PfRBC")
+
+all_traj_dat_mono <- bind_rows(apu_traj_dat,
+                          api_traj_dat,
+                          pu_traj_dat,
+                          pi_traj_dat) %>%
+  mutate(treatment = factor(treatment, levels = c("uRBC", "PfRBC"))) %>%
+  mutate(class = factor(class, levels = c("parasitemic", "aparasitemic")))
+
+library(ggh4x)
+strip <- strip_themed(background_x = elem_list_rect(fill = c("orchid1", "orchid3", alpha = 0.6)),
+                      background_y = elem_list_rect(fill = c("#e41a1c", "#58a4cb", alpha = 0.6)))
+
+all_traj_plot_mono <- all_traj_dat_mono %>%
+  ggplot(., aes(x = monocleumap_1, y = monocleumap_2, fill = log_pseudo_traj)) +
+  geom_point(pch=21, size = 2, color = "gray50", stroke = 0.25) +
+  xlab("UMAP 1") +
+  ylab("UMAP 2") +
+  scale_fill_viridis_c(name = "pseudotime", n.breaks= 10,
+                       guide = guide_colorbar(frame.colour = "gray50", ticks.colour = "gray50")) +
+  theme_bw() +
+  ggtitle("CD14 Mono") +
+  theme(legend.position = "bottom",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        legend.text = element_blank(),
+        plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+        strip.text = element_text(size = 12)) +
+  facet_grid2(rows = vars(class), cols = vars(treatment), strip = strip)
+
+all_traj_plot_mono
+```
+# E heatmaps for pseudotime
+
+```{r fig.align='center',fig.width=5.5, fig.height=3.5}
+# Monocytes
+
+cds_pr_test_monocytes_in_filt<-cds_pr_test_mon %>%
+  arrange(q_value, desc(abs(morans_I))) %>%
+  slice_head(n = 35)
+
+mat <- mono_in[["RNA"]]$data %>% as.data.frame()
+mat <- mat[rownames(cds_pr_test_monocytes_in_filt),] %>% as.matrix()
+mat <- t(scale(t(mat),  center = TRUE, scale = TRUE))
+metadata_reduced <- mono_in@meta.data[colnames(mat),] #need to reduce metadata
+all(rownames(metadata_reduced) == colnames(mat))
+
+cluster_anno <- data.frame(early.mid.late = factor(gtools::quantcut(metadata_reduced$log_pseudo_traj, q = 3), labels = c("early", "mid", "late")),
+                           pseudotime = metadata_reduced$log_pseudo_traj,
+                           treatment = factor(ifelse(metadata_reduced$stim == "irbc", "PfRBC", "uRBC"), levels = c("uRBC", "PfRBC")),
+                           class = factor(metadata_reduced$phenotype, levels = c("parasitemic", "aparasitemic")))
+rownames(cluster_anno) <- colnames(mat)
+
+#how to customize colors for column annotations, all names have to match what was defined in the cluster_annot df
+clab <- list("early.mid.late" = c("early" = "gray85", "mid" = "gray60", "late" = "gray25"),
+             "pseudotime" = circlize::colorRamp2(quantile(mono_in@meta.data$log_pseudo_traj, seq(0, 1, by = 0.01)), viridis::viridis(101)), #use viridis for consistency with dotplot
+             "class" = c("aparasitemic" = "#58a4cb", "parasitemic"= "#e41a1c"),
+             "treatment" = c("uRBC" = "orchid1", "PfRBC"= "orchid3"))
+ha <- HeatmapAnnotation(df = cluster_anno, col = clab, na_col = "lavender",
+                        simple_anno_size = unit(0.4, "cm"),
+                        annotation_legend_param = list(annotation_name_side = "left", nrow = 1),
+                        annotation_name_gp= gpar(fontsize = 10),
+                        show_legend = c(TRUE, TRUE, TRUE, TRUE))
+
+# id_ordered_by_pseudotime <- metadata_reduced %>%
+#   arrange(log_pseudo_traj) %>%
+#   rownames_to_column(var = "newid") %>%
+#   pull(newid)
+# mat <- mat[, id_ordered_by_pseudotime]
+col_fun = circlize::colorRamp2(c(-max(abs(mat)), 0, max(abs(mat))), c("blue", "white", "red"))
+
+#construct custom legends
+lgd_list <- list(lgd1 = Legend(labels = c("aparasitemic", "parasitemic"), legend_gp = gpar(fill = c( "#58a4cb", "#e41a1c")), title = "class", type = "grid"),
+                 lgd2 = Legend(labels = c("uRBC", "PfRBC"), legend_gp = gpar(fill = c("orchid1", "orchid3")), title = "treatment", type = "grid"))
+
+my_hm_mono <- Heatmap(mat,
+                 top_annotation = ha,
+                 show_column_names = FALSE,
+                 clustering_method_columns = NULL,
+                 column_order = order(as.numeric(metadata_reduced$log_pseudo_traj)), #add this to order by pseudotime
+                 cluster_columns = FALSE,
+                 row_names_gp = gpar(fontsize = 7),
+                 row_title_gp = gpar(fontsize =7),
+                 column_title = "cells",
+                 column_title_side = "bottom",
+                 row_title = "top differentially expressed genes",
+                 row_title_side = "right",
+                 show_heatmap_legend = FALSE)
+                 #heatmap_legend_param = list(
+                  # title = "z-score",
+                   #legend_direction = "horizontal", 
+                   #title_position = "lefttop",
+                   #legend_width = unit(3, "cm")))
+
+my_hm_mono
+```
+
+# create ggplot objects from heatmaps and grid them 
+
+```{r create unified complexheatmap, fig.align='center', fig.height= 4, fig.width=9.35}
+
+draw(my_hm_mono)
+
+gg_hm_mono <- as.ggplot(grid::grid.grabExpr(draw(my_hm_mono)))
+
+
+Figure6d <- plot_grid(all_traj_plot_mono, gg_hm_mono, nrow = 1, rel_widths = c(0.6,1), labels = c('d', 'e'))
+
+Figure6d
+```
+# save the heatmap annotaiton from here for assessing cell numbers along pseudotime (Figrue S10d)
+
+```{r}
+hm_serialized <- serialize(my_hm_mono, connection = NULL)
+
+saveRDS(hm_serialized, "figure6d_mono_pseudotime_trajecotry_heatmap.rds")
+```
+
+# Figure 6f: Pf transcript abundance
+
+```{r pf transcript abundance,fig.align='center', fig.height=4, fig.width=5.35}
+
+# Import invitro Pf object with only housekeeping/18srRNA/structural genes and human metadata
+
+invitro.pf_subset <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_hs_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
+
+# subset monocytes
+
+invitro.mono <- subset(invitro.pf_subset, subset= predicted.celltype.l2== "CD14 Mono")
+
+# re-parametrize to get a phenotype stim
+invitro.mono$outcome_stim <- paste0(invitro.mono$phenotype, "_", invitro.mono$stim)
+
+
+Idents(invitro.mono) <- "outcome_stim"
+
+invitro_mono_plot <- VlnPlot(invitro.mono, features = c( "Pf3D7-18S-Metagene"), pt.size = 0.01, alpha = 0.1) +
+  theme(legend.position = "none")
+
+
+invitro_mono_plot
+
+# let's make a proper boxplot for this
+gg_mono_pf_plot_norm <- data.frame("barcode" = rownames(invitro_mono_plot@data),
+                              "outcome" = invitro_mono_plot@data$ident, 
+                              "Pf_transcripts" = invitro_mono_plot@data$`Pf3D7-18S-Metagene`) %>%
+  mutate(outcome = tolower(outcome)) 
+
+mycomparisons <- list(c("aparasitemic\nuRBC", "aparasitemic\nPfRBC"), c("parasitemic\nuRBC", "parasitemic\nPfRBC"), c("aparasitemic\nPfRBC", "parasitemic\nPfRBC"))
+
+symnum.args <- list(cutpoints = c(0, 0.0001, 0.001, 0.01, 0.05, 1), symbols = c("****", "***", "**", "*", "ns"))
+
+gg_Pfplot_invitro_mono_tot_norm <- gg_mono_pf_plot_norm %>%
+  mutate(outcome = case_when(
+    outcome == "aparasitemic_urbc" ~ "aparasitemic\nuRBC",
+    outcome == "aparasitemic_irbc" ~ "aparasitemic\nPfRBC", 
+    outcome == "parasitemic_urbc" ~ "parasitemic\nuRBC",
+    outcome == "parasitemic_irbc" ~ "parasitemic\nPfRBC",
+     TRUE ~ "Other"))%>%
+  ggplot(., aes(x = factor(outcome, levels = c("aparasitemic\nuRBC", "aparasitemic\nPfRBC", "parasitemic\nuRBC", "parasitemic\nPfRBC")), y = Pf_transcripts, colour = outcome)) +
+  ggbeeswarm::geom_quasirandom(width = 0.2, size=0.04, alpha=0.6) +
+  geom_boxplot(width = 0.2, color = "gray20", alpha = 0, stroke=0.001) +
+  theme_bw() +
+  xlab("class: coculture") +
+  ylab("log(Total number of Pf transcripts)") +
+  theme(legend.position = "none",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        legend.text = element_blank(),
+        axis.title = element_text(size = 11),
+        axis.text = element_text(size = 10.5),
+        #plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+        strip.text = element_text(size = 11, color = "black", face = "italic"),#,
+        strip.background = element_blank()) +
+  ylab("Normalized Pf 3D7 18s rRNA expression") +
+  scale_color_manual(values= c("aparasitemic\nuRBC" = "#a1cdf1",
+                               "aparasitemic\nPfRBC" = "#58a4cb", 
+                               "parasitemic\nuRBC" = "#f2b2b3",
+                               "parasitemic\nPfRBC" = "#e41a1c")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.2))) +
+  stat_compare_means(comparisons = mycomparisons, 
+                     method = "wilcox", show.legend = FALSE, size = 3)
+
+gg_Pfplot_invitro_mono_tot_norm -> figure6f
+
+gg_Pfplot_invitro_mono_tot_norm 
+```
+
+# Figure 6g: proportion of phagocytosing monocytes in ap vs p
+
+```{r num phagocytes, fig.height=4, fig.width=4, fig.align='center'}
+
+invitro.hs_subset <- readRDS( "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_hs_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
+
+# subset monocytes
+invitro.mono <- subset(invitro.hs_subset, subset= predicted.celltype.l2 == "CD14 Mono")
+
+pf_phagocytosing_monos_plot <- invitro.mono@meta.data %>%
+  dplyr::rename(Pf3D7_18srRNA_metagene = `Pf3D7-18S-Metagene`) %>%
+  mutate(Pf3D7_18srRNA_metagene = ifelse(is.na(Pf3D7_18srRNA_metagene), 0, Pf3D7_18srRNA_metagene)) %>%
+  mutate(Pf_transctipt_presence = ifelse(Pf3D7_18srRNA_metagene > 0, "Yes", "No")) %>%
+  rownames_to_column(., "barcode") %>%
+  separate_wider_delim(barcode, delim = "_", names_sep = "") %>%
+  subset(barcode2 == "irbc") %>%
+  mutate(phagocytosing_monocytes = ifelse(Pf3D7_18srRNA_metagene > 5, "Yes", "No")) %>%
+  mutate(class = ifelse(barcode1 %in% c("kali0604", "kali0628", "kali0651"), "parasitemic", "aparasitemic")) %>%
+  mutate(class = ifelse(class== "aparasitemic", "aparasitemic\nPfRBC", "parasitemic\nPfRBC")) %>%
+  group_by(class, phagocytosing_monocytes)%>%
+  summarise(num= n()) %>%
+  ggplot(., aes(x= class, y= num, fill= phagocytosing_monocytes)) + 
+  geom_bar(stat = "identity", position = "fill") +
+  scale_y_continuous(labels = scales::percent) +
+  labs(y = "Percentage", x = "Group") +
+  scale_fill_manual(values = c("#5E4FA2", "#F46D43"))  +
+  xlab("class") +
+  ylab("% of total monocytes") +
+  labs(fill = "phagocytosing\nmonocytes") +
+  theme_bw()
+  
+pf_phagocytosing_monos_plot -> figure6g
+
+pf_phagocytosing_monos_plot
+```
+# Figure 6h: number of trasncripts within each class
+
+```{r tx per cell, fig.align='center', fig.width=4, fig.height=4}
+
+mycomparisons <- list(c("aparasitemic\nPfRBC", "parasitemic\nPfRBC"))
+
+pf_phagocytosing_monos__tx_levels_plot <- invitro.mono@meta.data %>%
+  dplyr::rename(Pf3D7_18srRNA_metagene = `Pf3D7-18S-Metagene`) %>%
+  mutate(Pf3D7_18srRNA_metagene = ifelse(is.na(Pf3D7_18srRNA_metagene), 0, Pf3D7_18srRNA_metagene)) %>%
+  mutate(Pf_transctipt_presence = ifelse(Pf3D7_18srRNA_metagene > 0, "Yes", "No")) %>%
+  rownames_to_column(., "barcode") %>%
+  separate_wider_delim(barcode, delim = "_", names_sep = "") %>%
+  subset(barcode2 == "irbc") %>%
+  mutate(phagocytosing_monocytes = ifelse(Pf3D7_18srRNA_metagene > 5, "Yes", "No")) %>%
+  mutate(class = ifelse(barcode1 %in% c("kali0604", "kali0628", "kali0651"), "parasitemic", "aparasitemic")) %>%
+  mutate(class = ifelse(class== "aparasitemic", "aparasitemic\nPfRBC", "parasitemic\nPfRBC")) %>%
+  subset(phagocytosing_monocytes== "Yes") %>%
+  ggplot(., aes(x= class, y= log(Pf3D7_18srRNA_metagene), fill= class, color= class)) + 
+  ggbeeswarm::geom_quasirandom(width = 0.2, size=1.5, alpha=0.6) +
+  geom_boxplot(width = 0.2, color = "gray20", alpha = 0.2, stroke=0.001) +
+  theme_bw() +
+  xlab("class") +
+  ylab("Normalized Pf 3D7 18s rRNA expression") +
+  theme(legend.position = "none",
+        legend.margin = margin(),
+        legend.spacing.y = unit(0.1, "cm"),
+        legend.key.height = unit(0.75, "lines"),
+        legend.text = element_blank(),
+        axis.title = element_text(size = 11),
+        #plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
+        strip.text = element_text(size = 8, color = "black", face = "italic"),#,
+        strip.background = element_blank()) +
+  scale_fill_manual(values= c("aparasitemic\nPfRBC" = "#58a4cb",
+                               "parasitemic\nPfRBC" = "#e41a1c")) +
+  scale_color_manual(values= c("aparasitemic\nPfRBC" = "#58a4cb",
+                               "parasitemic\nPfRBC" = "#e41a1c")) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.1))) +
+  stat_compare_means(comparisons = mycomparisons, 
+                     method = "wilcox", show.legend = FALSE, size = 3)
+
+pf_phagocytosing_monos__tx_levels_plot-> figure6h
+pf_phagocytosing_monos__tx_levels_plot
+```
+
+
+
+# assemble figure
+
+```{r fig.align='center', fig.height=12, fig.width=13.35}
+Figure6_ab_toprow <- plot_grid(Figure6a_gg, 
+                               Figure6b, 
+                               nrow = 1,
+                               labels = c('a', 'b'),
+                               rel_widths = c(5.85, 7.5))
+
+
+Figure6_cde_midrow <- plot_grid(Figure6c, 
+                               Figure6d, 
+                               nrow = 1,
+                               labels = c('c', ''),
+                               align = "h", axis = "tb", rel_widths = c(4, 9.35))
+
+Figure6fgh_bottomrow <- plot_grid(figure6f,
+                       figure6g, 
+                       figure6h,
+                       nrow = 1, 
+                       rel_widths = c(5.35, 4,4), 
+                       labels = c('f', 'g', 'h'))
+
+Figure6 <- plot_grid(Figure6_ab_toprow,
+                     Figure6_cde_midrow,
+                     Figure6fgh_bottomrow,
+                     nrow = 3,
+                     rel_heights = c(1,1,1))
+
+Figure6
+
+```
+
+```{r save fig s10}
+ggsave(paste0(figdir, "Figure 6 in vitro GEX changes volcanos mono and NK cells.pdf"), Figure6, units = "in", height = 12, width = 13.35, bg = "white")
+
+ggsave(paste0(figdir, "Figure 6 in vitro GEX changes volcanos mono and NK cells.png"), Figure6, units = "in", height = 12, width = 13.35, bg = "white", dpi = 300)
+```
+
