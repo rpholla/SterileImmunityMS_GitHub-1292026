@@ -153,15 +153,17 @@ linmarkers_ad.df$name <-gsub("CD4.1","CD4", linmarkers_ad.df$name)
 linmarkers_ad.df$name <-gsub("CD56-NCAM","CD56", linmarkers_ad.df$name)
 linmarkers_ad.df$name <-gsub("CD8a","CD8", linmarkers_ad.df$name)
 
-manual_adt_violin<-ggplot(linmarkers_ad.df, aes(x=factor(predicted.celltype.l2, levels = celltype_levels), y=n, #fill = factor(phenotype, levels = c("Aparasitemic", "Parasitemic")), 
+manual_adt_violin <- linmarkers_ad.df %>%
+  mutate(., phenotype= tolower(phenotype)) %>%
+  ggplot(., aes(x=factor(predicted.celltype.l2, levels = celltype_levels), y=n, #fill = factor(phenotype, levels = c("Aparasitemic", "Parasitemic")), 
                                                 color = phenotype)) +
   geom_point(position = position_jitterdodge(), size=1, alpha=0.65) +
   geom_boxplot(alpha = 0.4, color = "grey30", outlier.shape = NA) +
   #stat_compare_means(label = "p", 
   #                   comparisons = my_comps, method = "wilcox.test", vjust = 1) +
-  scale_color_manual(values = c( "Aparasitemic"="#3B9AB2",  "Parasitemic"="#F21A00" )) +
+  scale_color_manual(values = c( "aparasitemic"="#3B9AB2",  "parasitemic"="#F21A00" )) +
   xlab("transcriptionally defined subset") +
-  ylab("surace expression by antibody-derived tags (CITE-seq)") +
+  ylab("surface expression by antibody-derived tags (CITE-seq)") +
   facet_wrap(~name, scales = "free", nrow=2) +
   ylim(0, 500)+
   theme(axis.text.y = element_text(size=8),
@@ -171,12 +173,14 @@ manual_adt_violin<-ggplot(linmarkers_ad.df, aes(x=factor(predicted.celltype.l2, 
         strip.text = element_text(size= 14),
         legend.position = "top",
         legend.text = element_text(size= 16),
+        legend.title = element_text(size=16),
         panel.background = element_blank(),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         panel.border = element_rect(colour = "darkgrey", fill=NA, size=1),
-        plot.margin=unit(c(0.01,0.01,0.01,0.01), "null"))+
+        plot.margin=unit(c(0.01,0.01,0.01,0.01), "null")) +
   grids(linetype = "dashed")+
+  guides(color= guide_legend(override.aes = list(size = 5))) +
   ylim(0,80)
 
 
