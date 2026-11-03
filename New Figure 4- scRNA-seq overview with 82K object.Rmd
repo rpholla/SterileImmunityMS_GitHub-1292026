@@ -142,7 +142,7 @@ plot_umap_allcells <- refmapped.all.downsampled %>%
           raster = FALSE,
           combine = FALSE)
 umap_all_cells_dat <- plot_umap_allcells[[1]]$data %>%
-  mutate(class = "all cells (82K cells, n = 14)")
+  mutate(class = "all cells (82,044 cells, n = 14)")
 
 #Plot umap of aparasitemic
 plot_umap_apara <- all_apara %>%
@@ -169,7 +169,7 @@ umap_para_dat <- plot_umap_para[[1]]$data %>%
   mutate(class = "parasitemic (n=7)")
 
 all_umap_dat <- bind_rows(umap_all_cells_dat, umap_apara_dat, umap_para_dat) %>%
-  mutate(class = factor(class, levels = c("all cells (82K cells, n = 14)", "aparasitemic (n=7)", "parasitemic (n=7)")))
+  mutate(class = factor(class, levels = c("all cells (82,044 cells, n = 14)", "aparasitemic (n=7)", "parasitemic (n=7)")))
 
 strip <- strip_themed(background_x = elem_list_rect(fill = c("gray80", "#58a4cb", "#e41a1c", alpha = 0.6)))
 
@@ -177,12 +177,13 @@ cells_to_label <- c("CD14 Mono", "CD16 Mono", "CD4 Naive", "CD4 TEM", "CD8 Naive
                     "Treg", "NK_CD56bright")
 new_colors = colorRampPalette(brewer.pal(10,"Spectral"))(length(unique(all_umap_dat$predicted.celltype.l2)))
 find_center <- function(my_vector) my_vector[ceiling(length(my_vector)/2)]
+
 figure_4b <- all_umap_dat %>%
-  group_by(class, predicted.celltype.l2) %>%
+  group_by(predicted.celltype.l2) %>%
   mutate(midval_umap1_by_celltype = find_center(UMAP_1)) %>%
   mutate(midval_umap2_by_celltype = find_center(UMAP_2)) %>%
   mutate(cell_label = as.character(predicted.celltype.l2)) %>%
-  mutate(label = ifelse(predicted.celltype.l2 %in% cells_to_label & UMAP_1 == midval_umap1_by_celltype & class == "all cells (82K cells, n = 14)", cell_label, "")) %>%
+  mutate(label = ifelse(predicted.celltype.l2 %in% cells_to_label & UMAP_1 == midval_umap1_by_celltype & class == "all cells (82,044 cells, n = 14)", cell_label, "")) %>%
   ungroup() %>%
   ggplot(., aes(x = UMAP_1, y = UMAP_2, color = predicted.celltype.l2)) +
   geom_point(size = 0.5) +
@@ -266,7 +267,8 @@ figure_4c <- ggplot(q, aes(x = ndegs, y = reorder(cell_type, ndegs), colour = Im
         legend.title = element_blank())+
   scale_fill_manual(values = c("#AE5D74", "#367A47")) +
   scale_color_manual(values = c("#AE5D74", "#367A47")) +
-  ggpubr::grids(linetype = "dashed")
+  ggpubr::grids(linetype = "dashed") +
+  scale_x_continuous(breaks = seq(0, 12, by = 6))
 
 figure_4c
 ```
@@ -342,7 +344,7 @@ apara <- readRDS(file = dl$local_path)
 
 temp<- tempfile(fileext = ".rds")
 dl <- drive_download(
-as_id(""), path = temp, overwrite = TRUE)
+as_id("1WChT-6Phw_rIxtY7XVMjO7mznb_K-u_H"), path = temp, overwrite = TRUE)
 para <- readRDS(file = dl$local_path)
 
 
