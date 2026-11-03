@@ -1,0 +1,480 @@
+---
+title: 'Figure S1: Pf microarray and boosting data IgG and IgM'
+author: "Prasida Holla"
+date: "2025-08-12"
+output:   
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(limma) 
+library(survival)
+library(survminer)
+library(googledrive)
+library(dplyr)
+library(zscorer)
+library(tableone)
+library(EnhancedVolcano)
+library(ComplexHeatmap)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(EDASeq)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+# Figure S1. Statistical comparison of Pf-specific IgG and IgM boosting in aparasitemic and parasitemic
+
+```{r determine number of boosted antigens by stage, fig.align='center', fig.width=8, fig.height=12, message=FALSE, warning=FALSE}
+logFC_sterile_IgG_pset <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/Aparasitemic manuscript R/M7 vs M0 log2FC IgG raw heatmap sterile immunity.rds")
+
+temp <- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1iAExgGIyMCGHou7CJwZq39EMdzLo64Bh"), path = temp, overwrite = TRUE)
+logFC_sterile_IgG_pset<-readRDS(file = dl$local_path)
+
+
+protein_array_df <- pData(logFC_sterile_IgG_pset) %>%
+  mutate(class = factor(ifelse(InfClass == "Never Infected", "aparasitemic", "parasitemic"))) %>%
+  dplyr::select(Subject, class) %>%
+  dplyr::rename(subj_id = Subject)  %>%
+  left_join(., t(exprs(logFC_sterile_IgG_pset)) %>%
+              as.data.frame() %>%
+              rownames_to_column(var = "subj_id"),
+            by = "subj_id") %>%
+  pivot_longer(., cols = 3:ncol(.), names_to = "dummy_antigen", values_to = "LFC") %>%
+  left_join(., Biobase::fData(logFC_sterile_IgG_pset) %>%
+              dplyr::select(Antigen, `Antigen Id`, Stages) %>%
+              rownames_to_column(var = "dummy_antigen")) %>%
+  mutate(boost_1.00 = ifelse(LFC>0, 1, 0)) %>%
+  mutate(boost_1.25 = ifelse(LFC>0.585, 1, 0)) 
+
+protein_array_summarized <- protein_array_df %>%
+  group_by(subj_id, class) %>%
+  #filter(subj_id %in% c(downselected_Aparasitemic_n7, downselected_Parasitemic_n7)) %>%
+  dplyr::summarize(n_total = n(),
+            n_boosted_1.0 = sum(boost_1.00), prop_boosted_1.00 = sum(boost_1.00)/n(),
+            n_boosted_1.25 = sum(boost_1.25), prop_boosted_1.25 = sum(boost_1.25)/n()) %>%
+  ungroup() %>%
+  mutate("M7/M0 IgG boosting\nfor ≥10% antigens" = ifelse(prop_boosted_1.00 >= 0.1, "yes", "no")) %>%
+  mutate("M7/M0 IgG boosting\nfor ≥20% antigens" = ifelse(prop_boosted_1.00 >= 0.2, "yes", "no")) %>%
+  mutate("point_label_10" = ifelse(prop_boosted_1.00 < 0.1 & class == "aparasitemic", gsub("kali", "", subj_id), "")) %>%
+  mutate("point_label_20" = ifelse(prop_boosted_1.00 < 0.2 & class == "aparasitemic", gsub("kali", "", subj_id), ""))
+
+mytable <- table("class" = protein_array_summarized$class, "boosting" = protein_array_summarized$`M7/M0 IgG boosting
+for ≥10% antigens`)
+tabres <- fisher.test(mytable)
+
+labels <- protein_array_summarized %>%
+  dplyr::group_by(class) %>%
+  dplyr::count(class) %>%
+  dplyr::mutate(group_label = paste0(class, "\n(n=", n, ")"))
+
+
+M7_M0_boosting_beeswarm_plot_igg <- protein_array_summarized %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, y = prop_boosted_1.00)) +
+  ggbeeswarm::geom_quasirandom(aes(color = group_label)) +
+  #ggrepel::geom_text_repel(aes(label = point_label_20), size = 3) +
+  theme_bw() +
+  ggsci::scale_fill_aaas() +
+  scale_color_manual(values = c("#58a4cb", "#e41a1c")) +
+  ylab("% of antigens showing IgG boosting\n(M7/M0 > 1)") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  scale_y_continuous(labels = scales::percent, expand = expansion(mult = c(0.05, 0.15)), breaks = c(0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0)) +
+  stat_compare_means(method = "wilcox", aes(label = paste0("p = ", after_stat(p.format))), label.x.npc = "middle", label.y.npc = 1, vjust = -1) +
+  geom_hline(yintercept = 0.10, color = "gray20", linetype = "dotted")
+
+M7_M0_boosting_bar_plot_igg <- protein_array_summarized %>%
+ left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, fill = `M7/M0 IgG boosting\nfor ≥10% antigens`)) +
+  geom_bar() +
+  theme_bw() +
+  ggsci::scale_fill_bmj() +
+  ylab("number of participants") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "top") +
+  annotate("text", x = 1.5, y = 80, label = paste0("p = ", signif(tabres$p.value,2)))
+
+protein_array_summarized_spz <- protein_array_df %>%
+  dplyr::filter(Stages == "sporozoite") %>%
+  group_by(subj_id, class) %>%
+  #filter(subj_id %in% c(downselected_Aparasitemic_n7, downselected_Parasitemic_n7)) %>%
+  dplyr::summarize(n_total = n(),
+            n_boosted_1.0 = sum(boost_1.00), prop_boosted_1.00 = sum(boost_1.00)/n(),
+            n_boosted_1.25 = sum(boost_1.25), prop_boosted_1.25 = sum(boost_1.25)/n()) %>%
+  ungroup() %>%
+  mutate("M7/M0 IgG boosting\nfor ≥10% antigens" = ifelse(prop_boosted_1.00 >= 0.1, "yes", "no")) %>%
+  mutate("M7/M0 IgG boosting\nfor ≥20% antigens" = ifelse(prop_boosted_1.00 >= 0.2, "yes", "no")) %>%
+  mutate("point_label_10" = ifelse(prop_boosted_1.00 < 0.1 & class == "aparasitemic", gsub("kali", "", subj_id), "")) %>%
+  mutate("point_label_20" = ifelse(prop_boosted_1.00 < 0.2 & class == "aparasitemic", gsub("kali", "", subj_id), ""))
+
+mytable_spz <- table("class" = protein_array_summarized_spz$class, "boosting" = protein_array_summarized_spz$`M7/M0 IgG boosting
+for ≥10% antigens`)
+tabres_spz <- fisher.test(mytable_spz)
+
+M7_M0_boosting_beeswarm_plot_spz_igg <- protein_array_summarized_spz %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, y = prop_boosted_1.00)) +
+  ggbeeswarm::geom_quasirandom(aes(color = group_label)) +
+  #ggrepel::geom_text_repel(aes(label = point_label_20), size = 3) +
+  theme_bw() +
+  ggsci::scale_fill_aaas() +
+  scale_color_manual(values = c("#58a4cb", "#e41a1c")) +
+  ylab("% of antigens showing IgG boosting\n(M7/M0 > 1)") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  scale_y_continuous(labels = scales::percent, expand = expansion(mult = c(0.05, 0.15)), breaks = c(0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0)) +
+  stat_compare_means(method = "wilcox", aes(label = paste0("p = ", after_stat(p.format))), label.x.npc = "middle", label.y.npc = 1, vjust = -1) +
+  geom_hline(yintercept = 0.20, color = "gray20", linetype = "dotted")
+
+M7_M0_boosting_bar_plot_spz_igg <- protein_array_summarized_spz %>%
+ left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, fill = `M7/M0 IgG boosting\nfor ≥20% antigens`)) +
+  geom_bar() +
+  theme_bw() +
+  ggsci::scale_fill_bmj() +
+  ylab("number of participants") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "top") +
+  annotate("text", x = 1.5, y = 80, label = paste0("p = ", signif(tabres_spz$p.value,2)))
+
+protein_array_summarized_bs <- protein_array_df %>%
+  dplyr::filter(!grepl("sporozoite", Stages)) %>%
+  group_by(subj_id, class) %>%
+  #filter(subj_id %in% c(downselected_Aparasitemic_n7, downselected_Parasitemic_n7)) %>%
+  dplyr::summarize(n_total = n(),
+            n_boosted_1.0 = sum(boost_1.00), prop_boosted_1.00 = sum(boost_1.00)/n(),
+            n_boosted_1.25 = sum(boost_1.25), prop_boosted_1.25 = sum(boost_1.25)/n()) %>%
+  ungroup() %>%
+  mutate("M7/M0 IgG boosting\nfor ≥10% antigens" = ifelse(prop_boosted_1.00 >= 0.1, "yes", "no")) %>%
+  mutate("M7/M0 IgG boosting\nfor ≥20% antigens" = ifelse(prop_boosted_1.00 >= 0.2, "yes", "no")) %>%
+  mutate("point_label_10" = ifelse(prop_boosted_1.00 < 0.1 & class == "aparasitemic", gsub("kali", "", subj_id), "")) %>%
+  mutate("point_label_20" = ifelse(prop_boosted_1.00 < 0.2 & class == "aparasitemic", gsub("kali", "", subj_id), ""))
+
+mytable_bs <- table("class" = protein_array_summarized_bs$class, "boosting" = protein_array_summarized_bs$`M7/M0 IgG boosting
+for ≥10% antigens`)
+tabres_bs <- fisher.test(mytable_bs)
+
+M7_M0_boosting_beeswarm_plot_bs_igg <- protein_array_summarized_bs %>%
+ left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, y = prop_boosted_1.00)) +
+  ggbeeswarm::geom_quasirandom(aes(color = group_label)) +
+  #ggrepel::geom_text_repel(aes(label = point_label_20), size = 3) +
+  theme_bw() +
+  ggsci::scale_fill_aaas() +
+  scale_color_manual(values = c("#58a4cb", "#e41a1c")) +
+  ylab("% of antigens showing IgG boosting\n(M7/M0 > 1)") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  scale_y_continuous(labels = scales::percent, expand = expansion(mult = c(0.05, 0.15)), breaks = c(0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0)) +
+  stat_compare_means(method = "wilcox", aes(label = paste0("p = ", after_stat(p.format))), label.x.npc = "middle", label.y.npc = 1, vjust = -1) +
+  geom_hline(yintercept = 0.20, color = "gray20", linetype = "dotted")
+
+M7_M0_boosting_bar_plot_bs_igg <- protein_array_summarized_bs %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, fill = `M7/M0 IgG boosting\nfor ≥20% antigens`)) +
+  geom_bar() +
+  theme_bw() +
+  ggsci::scale_fill_bmj() +
+  ylab("number of participants") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "top") +
+  annotate("text", x = 1.5, y = 80, label = paste0("p = ", signif(tabres_bs$p.value,2)))
+```
+
+*Comment:* Only participant 0667 showed M7/M0 boosting in <10% of Pf antigens on the protein array (<25 antigens); however, participant 0631 came in a close second. Note that 0631 was used for single-cell studies.
+
+# plot same for IgM
+```{r determine number of boosted antigens by stage, fig.align='center', fig.width=8, fig.height=12, message=FALSE, warning=FALSE}
+
+logFC_sterile_IgM_pset <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/Aparasitemic manuscript R/M7 vs M0 log2FC IgM raw heatmap sterile immunity.rds")
+
+# google drive link provided here
+temp <- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("12Dgn9ojUpIwegwZGgSF7usR8wc9a1muq"), path = temp, overwrite = TRUE)
+logFC_sterile_IgM_pset<-readRDS(file = dl$local_path)
+
+protein_array_df <- pData(logFC_sterile_IgM_pset) %>%
+  mutate(class = factor(ifelse(InfClass == "Never Infected", "aparasitemic", "parasitemic"))) %>%
+  dplyr::select(Subject, class) %>%
+  dplyr::rename(subj_id = Subject)  %>%
+  left_join(., t(exprs(logFC_sterile_IgM_pset)) %>%
+              as.data.frame() %>%
+              rownames_to_column(var = "subj_id"),
+            by = "subj_id") %>%
+  pivot_longer(., cols = 3:ncol(.), names_to = "dummy_antigen", values_to = "LFC") %>%
+  left_join(., Biobase::fData(logFC_sterile_IgM_pset) %>%
+              dplyr::select(Antigen, `Antigen Id`, Stages) %>%
+              rownames_to_column(var = "dummy_antigen")) %>%
+  mutate(boost_1.00 = ifelse(LFC>0, 1, 0)) %>%
+  mutate(boost_1.25 = ifelse(LFC>0.585, 1, 0)) 
+
+protein_array_summarized <- protein_array_df %>%
+  group_by(subj_id, class) %>%
+  #filter(subj_id %in% c(downselected_Aparasitemic_n7, downselected_Parasitemic_n7)) %>%
+  dplyr::summarize(n_total = n(),
+            n_boosted_1.0 = sum(boost_1.00), prop_boosted_1.00 = sum(boost_1.00)/n(),
+            n_boosted_1.25 = sum(boost_1.25), prop_boosted_1.25 = sum(boost_1.25)/n()) %>%
+  ungroup() %>%
+  mutate("M7/M0 IgM boosting\nfor ≥10% antigens" = ifelse(prop_boosted_1.00 >= 0.1, "yes", "no")) %>%
+  mutate("M7/M0 IgM boosting\nfor ≥20% antigens" = ifelse(prop_boosted_1.00 >= 0.2, "yes", "no")) %>%
+  mutate("point_label_10" = ifelse(prop_boosted_1.00 < 0.1 & class == "aparasitemic", gsub("kali", "", subj_id), "")) %>%
+  mutate("point_label_20" = ifelse(prop_boosted_1.00 < 0.2 & class == "aparasitemic", gsub("kali", "", subj_id), ""))
+
+mytable <- table("class" = protein_array_summarized$class, "boosting" = protein_array_summarized$`M7/M0 IgM boosting
+for ≥10% antigens`)
+tabres <- fisher.test(mytable)
+
+labels <- protein_array_summarized %>%
+  dplyr::group_by(class) %>%
+  dplyr::count(class) %>%
+  dplyr::mutate(group_label = paste0(class, "\n(n=", n, ")"))
+
+
+M7_M0_boosting_beeswarm_plot_igm <- protein_array_summarized %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, y = prop_boosted_1.00)) +
+  ggbeeswarm::geom_quasirandom(aes(color = group_label)) +
+  #ggrepel::geom_text_repel(aes(label = point_label_10), size = 3) +
+  theme_bw() +
+  ggsci::scale_fill_aaas() +
+  scale_color_manual(values = c("#58a4cb", "#e41a1c")) +
+  ylab("% of antigens showing IgM boosting\n(M7/M0 > 1)") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  scale_y_continuous(labels = scales::percent, expand = expansion(mult = c(0.05, 0.15)), breaks = c(0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0)) +
+  stat_compare_means(method = "wilcox", aes(label = paste0("p = ", after_stat(p.format))), label.x.npc = "middle", label.y.npc = 1, vjust = -1) +
+  geom_hline(yintercept = 0.10, color = "gray20", linetype = "dotted")
+
+M7_M0_boosting_bar_plot_igm <- protein_array_summarized %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, fill = `M7/M0 IgM boosting\nfor ≥10% antigens`)) +
+  geom_bar() +
+  theme_bw() +
+  ggsci::scale_fill_bmj() +
+  ylab("number of participants") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "top") +
+  annotate("text", x = 1.5, y = 80, label = paste0("p = ", signif(tabres$p.value,2)))
+
+protein_array_summarized_spz <- protein_array_df %>%
+  dplyr::filter(Stages == "sporozoite") %>%
+  group_by(subj_id, class) %>%
+  #filter(subj_id %in% c(downselected_Aparasitemic_n7, downselected_Parasitemic_n7)) %>%
+  dplyr::summarize(n_total = n(),
+            n_boosted_1.0 = sum(boost_1.00), prop_boosted_1.00 = sum(boost_1.00)/n(),
+            n_boosted_1.25 = sum(boost_1.25), prop_boosted_1.25 = sum(boost_1.25)/n()) %>%
+  ungroup() %>%
+  mutate("M7/M0 IgM boosting\nfor ≥10% antigens" = ifelse(prop_boosted_1.00 >= 0.1, "yes", "no")) %>%
+  mutate("M7/M0 IgM boosting\nfor ≥20% antigens" = ifelse(prop_boosted_1.00 >= 0.2, "yes", "no")) %>%
+  mutate("point_label_10" = ifelse(prop_boosted_1.00 < 0.1 & class == "aparasitemic", gsub("kali", "", subj_id), "")) %>%
+  mutate("point_label_20" = ifelse(prop_boosted_1.00 < 0.2 & class == "aparasitemic", gsub("kali", "", subj_id), ""))
+
+mytable_spz <- table("class" = protein_array_summarized_spz$class, "boosting" = protein_array_summarized_spz$`M7/M0 IgM boosting
+for ≥10% antigens`)
+tabres_spz <- fisher.test(mytable_spz)
+
+M7_M0_boosting_beeswarm_plot_spz_igm <- protein_array_summarized_spz %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, y = prop_boosted_1.00)) +
+  ggbeeswarm::geom_quasirandom(aes(color = group_label)) +
+  #ggrepel::geom_text_repel(aes(label = point_label_20), size = 3) +
+  theme_bw() +
+  ggsci::scale_fill_aaas() +
+  scale_color_manual(values = c("#58a4cb", "#e41a1c")) +
+  ylab("% of antigens showing IgM boosting\n(M7/M0 > 1)") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  scale_y_continuous(labels = scales::percent, expand = expansion(mult = c(0.05, 0.15)), breaks = c(0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0)) +
+  stat_compare_means(method = "wilcox", aes(label = paste0("p = ", after_stat(p.format))), label.x.npc = "middle", label.y.npc = 1, vjust = -1) +
+  geom_hline(yintercept = 0.20, color = "gray20", linetype = "dotted")
+
+M7_M0_boosting_bar_plot_spz_igm <- protein_array_summarized_spz %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, fill = `M7/M0 IgM boosting\nfor ≥20% antigens`)) +
+  geom_bar() +
+  theme_bw() +
+  ggsci::scale_fill_bmj() +
+  ylab("number of participants") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "top") +
+  annotate("text", x = 1.5, y = 80, label = paste0("p = ", signif(tabres_spz$p.value,2)))
+
+protein_array_summarized_bs <- protein_array_df %>%
+  dplyr::filter(!grepl("sporozoite", Stages)) %>%
+  group_by(subj_id, class) %>%
+  #filter(subj_id %in% c(downselected_Aparasitemic_n7, downselected_Parasitemic_n7)) %>%
+  dplyr::summarize(n_total = n(),
+            n_boosted_1.0 = sum(boost_1.00), prop_boosted_1.00 = sum(boost_1.00)/n(),
+            n_boosted_1.25 = sum(boost_1.25), prop_boosted_1.25 = sum(boost_1.25)/n()) %>%
+  ungroup() %>%
+  mutate("M7/M0 IgM boosting\nfor ≥10% antigens" = ifelse(prop_boosted_1.00 >= 0.1, "yes", "no")) %>%
+  mutate("M7/M0 IgM boosting\nfor ≥20% antigens" = ifelse(prop_boosted_1.00 >= 0.2, "yes", "no")) %>%
+  mutate("point_label_10" = ifelse(prop_boosted_1.00 < 0.1 & class == "aparasitemic", gsub("kali", "", subj_id), "")) %>%
+  mutate("point_label_20" = ifelse(prop_boosted_1.00 < 0.2 & class == "aparasitemic", gsub("kali", "", subj_id), ""))
+
+mytable_bs <- table("class" = protein_array_summarized_bs$class, "boosting" = protein_array_summarized_bs$`M7/M0 IgM boosting
+for ≥10% antigens`)
+tabres_bs <- fisher.test(mytable_bs)
+
+M7_M0_boosting_beeswarm_plot_bs_igm <- protein_array_summarized_bs %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, y = prop_boosted_1.00)) +
+  ggbeeswarm::geom_quasirandom(aes(color = group_label)) +
+  #ggrepel::geom_text_repel(aes(label = point_label_10), size = 3) +
+  theme_bw() +
+  ggsci::scale_fill_aaas() +
+  scale_color_manual(values = c("#58a4cb", "#e41a1c")) +
+  ylab("% of antigens showing IgM boosting\n(M7/M0 > 1)") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "none") +
+  scale_y_continuous(labels = scales::percent, expand = expansion(mult = c(0.05, 0.15)), breaks = c(0, 0.1, 0.2, 0.4, 0.6, 0.8, 1.0)) +
+  stat_compare_means(method = "wilcox", aes(label = paste0("p = ", after_stat(p.format))), label.x.npc = "middle", label.y.npc = 1, vjust = -1) +
+  geom_hline(yintercept = 0.20, color = "gray20", linetype = "dotted")
+
+M7_M0_boosting_bar_plot_bs_igm <- protein_array_summarized_bs %>%
+  left_join(., labels,
+            by = "class") %>%
+  ggplot(., aes(x = group_label, fill = `M7/M0 IgM boosting\nfor ≥20% antigens`)) +
+  geom_bar() +
+  theme_bw() +
+  ggsci::scale_fill_bmj() +
+  ylab("number of participants") +
+  theme(axis.title.x = element_blank(),
+        legend.position = "top") +
+  annotate("text", x = 1.5, y = 80, label = paste0("p = ", signif(tabres_bs$p.value,2)))
+```
+
+
+```{r plot grid Fig S2, fig.align='center', fig.width=18, fig.height=12, message=FALSE, warning=FALSE}
+all_ags <- ggdraw() + draw_label("all antigens (248)", x = 0.5, y = 0.35, hjust = 0, angle = 90)
+spz_ags <- ggdraw() + draw_label("sporozoite antigens (13)", x = 0.5, y = 0.25, hjust = 0, angle = 90)
+bs_ags <- ggdraw() +  draw_label("blood-stage antigens (111)", x = 0.5, y = 0.25, hjust = 0, angle = 90)
+
+top_row_S1 <- plot_grid(
+                        M7_M0_boosting_beeswarm_plot_igm, 
+                        M7_M0_boosting_bar_plot_igm, 
+                        M7_M0_boosting_beeswarm_plot_igg, 
+                        M7_M0_boosting_bar_plot_igg,
+                        rel_widths = c(1,1,1,1), nrow = 1, ncol = 4, axis = "bt")
+
+top_row_S1_labeled <- plot_grid(all_ags,
+                        top_row_S1,
+                        align = 'v',
+                        rel_widths = c(1,10))
+
+mid_row_S1 <- plot_grid(
+                      M7_M0_boosting_beeswarm_plot_spz_igm, 
+                      M7_M0_boosting_bar_plot_spz_igm,
+                      M7_M0_boosting_beeswarm_plot_spz_igg, 
+                      M7_M0_boosting_bar_plot_spz_igg,
+                      rel_widths = c(1,1,1,1), nrow = 1, ncol = 4, axis = "bt")
+
+mid_row_S1_labeled <- plot_grid(spz_ags,
+                        mid_row_S1,
+                        align = 'v',
+                        rel_widths = c(1,10))
+
+bottom_row_S1 <- plot_grid(
+                     M7_M0_boosting_beeswarm_plot_bs_igm,
+                     M7_M0_boosting_bar_plot_bs_igm,
+                     M7_M0_boosting_beeswarm_plot_bs_igg,
+                     M7_M0_boosting_bar_plot_bs_igg,
+                     rel_widths = c(1,1,1,1), nrow = 1, ncol = 4, axis = "bt")
+
+bottom_row_S1_labeled <- plot_grid(bs_ags,
+                        bottom_row_S1,
+                        align = 'v',
+                        rel_widths = c(1,10))
+
+
+Fig_S1 <- plot_grid(top_row_S1_labeled, 
+                    mid_row_S1_labeled,
+                    bottom_row_S1_labeled,
+                    nrow = 3, labels = c('a', 'b', 'c'), align = "h")
+Fig_S1
+```
+
+**Figure S1. Boosting of *P. falciparum*-specific IgG reactivity as evidence of malaria exposure.** Proportion of antigens on a *P. falciparum* protein array showing boosting of specific IgG during the malaria season (M7/M0 reactivity > 1) for **a.** all antigens, **b.** antigens expressed exclusively in sporozoites, **c.** and antigens expressed in the blood-stages but not in sporozoites. Note that 27 antigens on the protein array did not have sufficient mass spectroscopy data to determine stage-specificity. Right-sided panels show the number of participants in each class that demonstrated boosting in at least 10% of antigens. Significance determined by Wilcoxon test for left-sided panels and Fisher's exact test for right-sided panels.
+
+```{r save protein array M7 M0 heatmap IgG, echo = FALSE, include=FALSE, eval=FALSE, fig.align='center', fig.width= 14, fig.height=4}
+# png(file = paste0(figdir, "Fig X M7 M0 log2FC pf250 array heatmap.png"), height = 8, width = 16.5, units = "in", res = 300)
+# draw(hm + ra, heatmap_legend_side="right", annotation_legend_side="top", padding = unit(c(2, 2, 20, 2), "mm"))
+# dev.off()
+# p1 <- plot_grid(gSG6_plot, NULL, NULL, NULL, ncol = 4)
+# p2 <- grid.grabExpr(draw(M0_M7_protein_array))
+#plot_grid(gSG6_plot, p2, nrow = 1, rel_widths = c(1.3,5), labels = c("a", "b"), align = c("hv"), axis = "tb")
+
+ggsave(filename = paste0(figdir, "Figure S1 M7 M0 Protein Array IgM and IgG boosting between Classes n14 n77.png"),
+       Fig_S1,
+       units = "in", width = 14, height = 10, bg = "white", dpi = 300)
+
+ggsave(filename = paste0(figdir, "Figure S1 M7 M0 Protein Array IgM and IgG boosting between Classes n14 n77.pdf"),
+       Fig_S1,
+       units = "in", width = 14, height = 10, bg = "white")
+```
+
+# Table S2 compile from these results
+
+```{r table S2 Pf array data, include=TRUE}
+
+# create IgG protein array DF, then rename 
+protein_array_df->protein_array_df_igm
+protein_array_df->protein_array_df_igm
+protein_array_df_igg$isotype <- "IgG"
+protein_array_df_igm$isotype <- "IgGM"
+```
+
