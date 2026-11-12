@@ -51,7 +51,7 @@ library(ggplot2)
 library(ggalluvial)
 library(ggplotify)
 
-figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Clean Figures/"
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/New versions 01-2026/Cleaner Figures/"
 
 draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
   if (is.null(theme)) {
@@ -97,7 +97,13 @@ Figure6a_gg
 ```{r umap plots of in vitro data, include=TRUE, message=FALSE, warning=FALSE}
 #Import the reference mapped, subsampled 50K in vitro object
 
-refmapped.invitro <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ in vitro samples integrated and reference mapped 59k non downsampled object 27May 2026.rds")
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1hYk-5ndaUTz2aVW4vkm6sGOOvasRyKCP"), path = temp, overwrite = TRUE)
+refmapped.invitro <- readRDS(file = dl$local_path)
+
+# refmapped.invitro <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ in vitro filt matrices samples integrated and reference mapped 54.5k non downsampled object.rds")
 
 all.split <- SplitObject(refmapped.invitro, split.by ="phenotype")
 all_apara <- all.split$aparasitemic
@@ -107,7 +113,7 @@ all_para <- all.split$parasitemic
 para_split <- SplitObject(all_para, split.by = "stim")
 ```
 
-```{r prepare pf stim umaps, fig.align='center', fig.height=4, fig.width=7.5}
+```{r prepare pf stim umaps, fig.align='center', fig.height=4, fig.width=7}
 #plot umap of all cells, colored by celltype
 plot_umap_allcells <- DimPlot(refmapped.invitro,
                              reduction = "ref.umap",
@@ -186,7 +192,7 @@ all_umap_plot <- plot_umap_all %>%
   mutate(maxval_umap2_by_celltype = max(UMAP_2)) %>%
   mutate(cell_label = as.character(predicted.celltype.l2)) %>%
   mutate(label_center = ifelse(predicted.celltype.l2 %in% cells_to_label & UMAP_1 == midval_umap1_by_celltype, cell_label, "")) %>%
-  mutate(label = ifelse(predicted.celltype.l2 %in% c("CD14 Mono", "CD16 Mono", "NK", "NK_CD56bright") & UMAP_2 == midval_umap2_by_celltype, cell_label, "")) %>%
+  mutate(label = ifelse(predicted.celltype.l2 %in% c("CD14 Mono", "CD16 Mono", "NK") & UMAP_2 == midval_umap2_by_celltype, cell_label, "")) %>%
   #mutate(label = ifelse(predicted.celltype.l2 %in% c("CD16 Mono" & UMAP_2 == minval_umap2_by_celltype, cell_label, label)) %>%
   ungroup() %>%
   ggplot(., aes(x = UMAP_1, y = UMAP_2, color = predicted.celltype.l2)) +
@@ -221,32 +227,27 @@ all_umap_plot
 
 # import MAST DGE lists
 
-mast_dge_gsea <- readRDS("/Users/rholla/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/GSEA/mono and NK GSEA from MAST of 59k non downsampled obj.rds") %>%
-  bind_rows(., .id = "celltype") %>%
-  mutate(class = "aparasitemic")
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1EwdusLa7AoT9VgFobt1NAEqzXnit8feK"), path = temp, overwrite = TRUE)
+mast_dge_gsea <- readRDS(file = dl$local_path)
 
-apara_mast <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/aparasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_aparasitemic_notdownsampled_54.5k_apara_invitro.rds") %>%
-  bind_rows(., .id = "celltype") %>%
-  mutate(class = "aparasitemic")
+mast_dge_gsea <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/GSEA/mono and NK GSEA from MAST of filtmatrices 54.5k non downsampled obj.rds") %>%
+  bind_rows(., .id = "category") %>%
+  separate_wider_delim(cols = category, "_", names = c("celltype", "stim"))
 
-para_mast <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/parasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_parasitemic_notdownsampled_54.5k_apara_invitro.rds") %>%
-  bind_rows(., .id = "celltype") %>%
-  mutate(class = "parasitemic")
-
-mast_dge_gsea <- rbind(apara_mast, para_mast)
-
-hall_invitro_all_celltypes <- mast_dge_gsea %>%
+hall_invitro_df <- mast_dge_gsea %>%
                       dplyr::filter(., grepl("MSigDB_Hallmark_v7.4", module_type))
 
 
 basetextsize <- 9
 myfont <- "sans"
-bubble_max_size <- 8
+bubble_max_size <- 5
 
 # Add Scale_y_limits to include aparasitemic and show no differential enrichment there
-invitro_irbc_plot <- hall_invitro_all_celltypes %>%
-  mutate(comparison = factor(class, levels=c("aparasitemic", "parasitemic"), labels = c("Δ aparasitemic","Δ parasitemic"))) %>%
-  dplyr::filter(padj < 0.05) %>%
+invitro_irbc_plot <- hall_invitro_df %>%
+  mutate(comparison = factor(stim, levels=c("aparasitemic", "parasitemic"), labels = c("Δ aparasitemic","Δ parasitemic"))) %>%
+  dplyr::filter(padj < 0.01) %>%
   mutate(pathway = gsub("INTERFERON", "IFN", pathway)) %>%
   mutate(pathway = gsub("ALPHA", "α", pathway)) %>%
   mutate(pathway = gsub("BETA", "β", pathway)) %>%
@@ -263,14 +264,15 @@ invitro_irbc_plot <- hall_invitro_all_celltypes %>%
   hrbrthemes::theme_ipsum_es(base_family = myfont, base_size = basetextsize) +
   #ylab("pathway") +
   theme(plot.title = element_blank(),
-        #axis.title.x = element_blank(),
+        axis.title.x = element_blank(),
         axis.title.y = element_blank(),
-        axis.title.x = element_text(size = 8),
+        #axis.title.x = element_text(size = 8),
         strip.background = element_blank(),
-        legend.position = "bottom",
-        legend.title.position = "top",
-        legend.justification = "right",
-        legend.box="horizontal",
+        strip.text = element_text(size=10),
+        legend.position = "right",
+        #legend.title.position = "top",
+        #legend.justification = "right",
+        legend.box="vertical",
         legend.margin=margin(),
         legend.spacing.y = unit(0.1, "cm"),
         legend.key.height = unit(0.75, "lines"),
@@ -285,15 +287,26 @@ invitro_irbc_plot -> Figure6c
 invitro_irbc_plot
 ```
 
-# D: pseudotime trajectory analysis ok monocytes. Here, we drop NK cells becuase we do not see a strong response in them
+# D: pseudotime trajectory analysis of monocytes. Here, we drop NK cells becuase we do not see a strong response in them
 
 # read in data for monos
 
 ```{r read in trajwctory data, include=TRUE}
 
-mono_in <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ monocytes in vitro from 59k non downsampled object with pseudotime traj mapped May 2026.rds")
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1vZ3B45LwtXjH_7M-WPXbaP15-OdDckYJ"), path = temp, overwrite = TRUE)
+mono_in <- readRDS(file = dl$local_path)
 
-cds_pr_test_mon<- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ monocytes cds_pr_test along trajectory in vitro from 59k non downsampled.rds")
+#mono_in <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ monocytes in vitro from 54.5k non downsampled object with pseudotime traj mapped May 2026.rds")
+
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1rqLIF7M4650aPOonOD9eG2elplZbluGR"), path = temp, overwrite = TRUE)
+cds_pr_test_mon <- readRDS(file = dl$local_path)
+
+#cds_pr_test_mon<- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/ monocytes cds_pr_test rbgenes_removed along trajectory in vitro from 54.5k non downsampled.rds")
 
 
 ```
@@ -364,7 +377,7 @@ all_traj_plot_mono
 
 cds_pr_test_monocytes_in_filt<-cds_pr_test_mon %>%
   arrange(q_value, desc(abs(morans_I))) %>%
-  slice_head(n = 35)
+  slice_head(n = 25)
 
 mat <- mono_in[["RNA"]]$data %>% as.data.frame()
 mat <- mat[rownames(cds_pr_test_monocytes_in_filt),] %>% as.matrix()
@@ -383,6 +396,7 @@ clab <- list("early.mid.late" = c("early" = "gray85", "mid" = "gray60", "late" =
              "pseudotime" = circlize::colorRamp2(quantile(mono_in@meta.data$log_pseudo_traj, seq(0, 1, by = 0.01)), viridis::viridis(101)), #use viridis for consistency with dotplot
              "class" = c("aparasitemic" = "#58a4cb", "parasitemic"= "#e41a1c"),
              "treatment" = c("uRBC" = "orchid1", "PfRBC"= "orchid3"))
+
 ha <- HeatmapAnnotation(df = cluster_anno, col = clab, na_col = "lavender",
                         simple_anno_size = unit(0.4, "cm"),
                         annotation_legend_param = list(annotation_name_side = "left", nrow = 1),
@@ -394,6 +408,7 @@ ha <- HeatmapAnnotation(df = cluster_anno, col = clab, na_col = "lavender",
 #   rownames_to_column(var = "newid") %>%
 #   pull(newid)
 # mat <- mat[, id_ordered_by_pseudotime]
+
 col_fun = circlize::colorRamp2(c(-max(abs(mat)), 0, max(abs(mat))), c("blue", "white", "red"))
 
 #construct custom legends
@@ -424,20 +439,21 @@ my_hm_mono
 
 # create ggplot objects from heatmaps and grid them 
 
-```{r create unified complexheatmap, fig.align='center', fig.height= 4, fig.width=9.35}
+```{r create unified complexheatmap, fig.align='center', fig.height= 4, fig.width=11}
 
 draw(my_hm_mono)
 
 gg_hm_mono <- as.ggplot(grid::grid.grabExpr(draw(my_hm_mono)))
 
 
-Figure6d <- plot_grid(all_traj_plot_mono, gg_hm_mono, nrow = 1, rel_widths = c(0.6,1), labels = c('d', 'e'))
+Figure6de <- plot_grid(all_traj_plot_mono, gg_hm_mono, nrow = 1, rel_widths = c(0.6,1), labels = c('d', 'e'))
 
-Figure6d
+Figure6de
 ```
-# save the heatmap annotaiton from here for assessing cell numbers along pseudotime (Figrue S10d)
+# save the heatmap annotaiton from here for assessing cell numbers along pseudotime (Figure S10d)
 
-```{r}
+```{r save hm annotation for supplemental info, include=TRUE}
+
 hm_serialized <- serialize(my_hm_mono, connection = NULL)
 
 saveRDS(hm_serialized, "figure6d_mono_pseudotime_trajecotry_heatmap.rds")
@@ -445,11 +461,16 @@ saveRDS(hm_serialized, "figure6d_mono_pseudotime_trajecotry_heatmap.rds")
 
 # Figure 6f: Pf transcript abundance
 
-```{r pf transcript abundance,fig.align='center', fig.height=4, fig.width=5.35}
+```{r pf transcript abundance,fig.align='center', fig.height=2, fig.width=3.5}
 
 # Import invitro Pf object with only housekeeping/18srRNA/structural genes and human metadata
 
-invitro.pf_subset <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_hs_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("191SPVPF3XuTG220_yV9uYgbz45PX4urx"), path = temp, overwrite = TRUE)
+invitro.pf_subset <- readRDS(file = dl$local_path)
+
+invitro.pf_subset <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_pf_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
 
 # subset monocytes
 
@@ -489,25 +510,25 @@ gg_Pfplot_invitro_mono_tot_norm <- gg_mono_pf_plot_norm %>%
   geom_boxplot(width = 0.2, color = "gray20", alpha = 0, stroke=0.001) +
   theme_bw() +
   xlab("class: coculture") +
-  ylab("log(Total number of Pf transcripts)") +
   theme(legend.position = "none",
         legend.margin = margin(),
         legend.spacing.y = unit(0.1, "cm"),
         legend.key.height = unit(0.75, "lines"),
         legend.text = element_blank(),
-        axis.title = element_text(size = 11),
-        axis.text = element_text(size = 10.5),
+        axis.title = element_text(size = 8),
+        axis.text = element_text(size = 8),
         #plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
         strip.text = element_text(size = 11, color = "black", face = "italic"),#,
         strip.background = element_blank()) +
-  ylab("Normalized Pf 3D7 18s rRNA expression") +
+  ylab("Normalized Pf 3D7 18s rRNA\n expression") +
   scale_color_manual(values= c("aparasitemic\nuRBC" = "#a1cdf1",
                                "aparasitemic\nPfRBC" = "#58a4cb", 
                                "parasitemic\nuRBC" = "#f2b2b3",
                                "parasitemic\nPfRBC" = "#e41a1c")) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.2))) +
+  scale_y_continuous(expand = expansion(mult = c(0, 0.5))) +
   stat_compare_means(comparisons = mycomparisons, 
-                     method = "wilcox", show.legend = FALSE, size = 3)
+                     method = "wilcox", show.legend = FALSE, size = 3) #+
+  #scale_y_continuous(trans = pseudo_log_trans(base = 10))
 
 gg_Pfplot_invitro_mono_tot_norm -> figure6f
 
@@ -516,9 +537,14 @@ gg_Pfplot_invitro_mono_tot_norm
 
 # Figure 6g: proportion of phagocytosing monocytes in ap vs p
 
-```{r num phagocytes, fig.height=4, fig.width=4, fig.align='center'}
+```{r num phagocytes, fig.height=2, fig.width=4, fig.align='center'}
 
-invitro.hs_subset <- readRDS( "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_hs_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1iNj4FzfHb0kvzrjYtL6IJFmLvbZvcgw4"), path = temp, overwrite = TRUE)
+invitro.hs_subset <- readRDS(file = dl$local_path)
+
+#invitro.hs_subset <- readRDS( "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_hs_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
 
 # subset monocytes
 invitro.mono <- subset(invitro.hs_subset, subset= predicted.celltype.l2 == "CD14 Mono")
@@ -551,7 +577,7 @@ pf_phagocytosing_monos_plot
 ```
 # Figure 6h: number of trasncripts within each class
 
-```{r tx per cell, fig.align='center', fig.width=4, fig.height=4}
+```{r tx per cell, fig.align='center', fig.width=4, fig.height=2}
 
 mycomparisons <- list(c("aparasitemic\nPfRBC", "parasitemic\nPfRBC"))
 
@@ -571,13 +597,13 @@ pf_phagocytosing_monos__tx_levels_plot <- invitro.mono@meta.data %>%
   geom_boxplot(width = 0.2, color = "gray20", alpha = 0.2, stroke=0.001) +
   theme_bw() +
   xlab("class") +
-  ylab("Normalized Pf 3D7 18s rRNA expression") +
+  ylab("Normalized Pf 3D7 18s rRNA\n expression") +
   theme(legend.position = "none",
         legend.margin = margin(),
         legend.spacing.y = unit(0.1, "cm"),
         legend.key.height = unit(0.75, "lines"),
         legend.text = element_blank(),
-        axis.title = element_text(size = 11),
+        axis.title = element_text(size = 8),
         #plot.margin=unit(c(0.1,0.1,0.1,0.1), "null"),
         strip.text = element_text(size = 8, color = "black", face = "italic"),#,
         strip.background = element_blank()) +
@@ -595,42 +621,44 @@ pf_phagocytosing_monos__tx_levels_plot
 
 
 
-# assemble figure
+# assemble figure. removing schematic from part.a 
 
-```{r fig.align='center', fig.height=12, fig.width=13.35}
-Figure6_ab_toprow <- plot_grid(Figure6a_gg, 
+```{r fig.align='center', fig.height=11, fig.width=11}
+
+Figure6_bc_toprow <- plot_grid(
                                Figure6b, 
+                               Figure6c,
                                nrow = 1,
                                labels = c('a', 'b'),
-                               rel_widths = c(5.85, 7.5))
+                               rel_widths = c(7, 4))
 
 
-Figure6_cde_midrow <- plot_grid(Figure6c, 
-                               Figure6d, 
-                               nrow = 1,
-                               labels = c('c', ''),
-                               align = "h", axis = "tb", rel_widths = c(4, 9.35))
+#Figure6_de_midrow <- plot_grid(Figure6c, 
+#                               Figure6d, 
+#                               nrow = 1,
+ #                              labels = c('c', ''),
+ #                              align = "h", axis = "tb", rel_widths = c(4, 9.35))
 
 Figure6fgh_bottomrow <- plot_grid(figure6f,
                        figure6g, 
                        figure6h,
                        nrow = 1, 
-                       rel_widths = c(5.35, 4,4), 
+                       rel_widths = c(1,1.5,1), 
                        labels = c('f', 'g', 'h'))
 
-Figure6 <- plot_grid(Figure6_ab_toprow,
-                     Figure6_cde_midrow,
+Figure6 <- plot_grid(Figure6_bc_toprow,
+                     Figure6de,
                      Figure6fgh_bottomrow,
                      nrow = 3,
-                     rel_heights = c(1,1,1))
+                     rel_heights = c(1,1,0.5))
 
 Figure6
 
 ```
 
 ```{r save fig s10}
-ggsave(paste0(figdir, "Figure 6 in vitro GEX changes volcanos mono and NK cells.pdf"), Figure6, units = "in", height = 12, width = 13.35, bg = "white")
+ggsave(paste0(figdir, "Figure 6 in vitro GEX changes volcanos mono and NK cells.pdf"), Figure6, units = "in", height = 11, width = 11, bg = "white")
 
-ggsave(paste0(figdir, "Figure 6 in vitro GEX changes volcanos mono and NK cells.png"), Figure6, units = "in", height = 12, width = 13.35, bg = "white", dpi = 300)
+ggsave(paste0(figdir, "Figure 6 in vitro GEX changes volcanos mono and NK cells.png"), Figure6, units = "in", height = 11, width = 11, bg = "white", dpi = 300)
 ```
 
