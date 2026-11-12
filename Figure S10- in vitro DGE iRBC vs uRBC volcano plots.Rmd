@@ -1,0 +1,668 @@
+---
+title: "Figure S10- in vitro DGE iRBC vs uRBC volcano plots"
+author: "Prasida Holla"
+date: "2026-03-01"
+output:
+  html_document:
+    theme: cerulean
+    toc: TRUE
+    number_sections: TRUE
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+Required packages
+
+```{r setup, message = FALSE, warning = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+library(tidyverse)
+library(writexl)
+library(ComplexUpset)
+library(readxl)
+library(ggplot2)
+library(ggpubr)
+library(Hmisc)
+library(ComplexHeatmap)
+library(monocle3)
+library(scCustomize)
+library(Seurat) 
+library(SeuratWrappers)
+library(patchwork)
+library(SeuratDisk)
+library(RColorBrewer)
+library(MAST)
+library(googledrive)
+library(miscTools)
+library(circlize)
+library(png)
+library(cowplot)
+library(tmod)  
+library(Biobase)
+library(pdftools)
+library(ggh4x)
+library(Signac)
+library(EnsDb.Hsapiens.v86)
+library(dplyr)
+library(ggplot2)
+#library(scriabin)
+library(ggalluvial)
+
+figdir <- "~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/manuscript components/new versions 01-2026/Clean Figures/"
+
+draw_label_theme <- function(label, theme = NULL, element = "text", ...) {
+  if (is.null(theme)) {
+    theme <- ggplot2::theme_get()
+  }
+  if (!element %in% names(theme)) {
+    stop("Element must be a valid ggplot theme element name")
+  }
+
+  elements <- ggplot2::calc_element(element, theme)
+
+  cowplot::draw_label(label, 
+                      fontfamily = elements$family,
+                      fontface = elements$face,
+                      colour = elements$color,
+                      size = elements$size,
+                      ...
+  )
+}
+```
+
+
+# A: plot number of DEGS across the four comparisons
+
+```{r plot ndegs, include=TRUE, fig.align='center', fig.height=5.5, fig.width=5.2}
+
+# For monocytes
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1JK9Z5Qq8eC0hS3svRA-24-pNf27ymMG8"), path = temp, overwrite = TRUE)
+irbc_ap_v_p <- readRDS(file = dl$local_path)
+
+
+irbc_ap_v_p <- imap(readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/iRBC aparasitemic v parasitemic/mast_deglists_filtmatrices_apara_v_para_irbc_notdownsampled_54.5k_invitro.rds"), ~.x %>%
+                      rownames_to_column(., "gene")) %>%
+  bind_rows(., .id= "celltype") %>%
+  #as.data.frame() %>%
+  mutate(cat = "PfRBC: aparasitemic vs parasitemic") %>%
+  subset(celltype %in% c("CD14 Mono", "NK")) %>%
+  subset(abs(avg_log2FC) > 1 & p_val_adj < 0.05) %>%
+  dplyr::select(c(gene, celltype, cat))
+
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1nBCiKvnExUauJqpqS-A1LU8PXM45eVIo"), path = temp, overwrite = TRUE)
+urbc_ap_v_p <- readRDS(file = dl$local_path)
+
+
+urbc_ap_v_p <- imap(readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/uRBC aparasitemic v parasitemic/mast_deglists_filtmatrices_apara_v_para_urbc_notdownsampled_54.5k_invitro.rds"), ~.x %>%
+                      rownames_to_column(., "gene")) %>%
+  bind_rows(., .id= "celltype") %>%
+  #as.data.frame() %>%
+  mutate(cat = "uRBC: aparasitemic vs parasitemic") %>%
+  subset(celltype %in% c("CD14 Mono", "NK")) %>%
+  subset(abs(avg_log2FC) > 1 & p_val_adj < 0.05) %>%
+  dplyr::select(c(gene, celltype, cat))
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("10XwVnlcyFjBd8BXgmLFJXajv_kDAa-Mf"), path = temp, overwrite = TRUE)
+apara_ivu <- readRDS(file = dl$local_path)
+
+
+apara_ivu <- imap(readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/aparasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_aparasitemic_notdownsampled_54.5k_apara_invitro.rds"), ~.x %>%
+                   rownames_to_column(., "gene")) %>%
+  bind_rows(., .id= "celltype") %>%
+  #as.data.frame() %>%
+  mutate(cat = "aparasitemic: PfRBC vs uRBC") %>%
+subset(celltype %in% c("CD14 Mono", "NK")) %>%
+  subset(abs(avg_log2FC) > 1 & p_val_adj < 0.05) %>%
+  dplyr::select(c(gene, celltype, cat))
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1lFrpG1l9PAJS8Q6AzMSOSFFYvSC3HqqQ"), path = temp, overwrite = TRUE)
+para_ivu <- readRDS(file = dl$local_path)
+
+para_ivu <- imap(readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/parasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_parasitemic_notdownsampled_54.5k_apara_invitro.rds"), ~.x %>%
+                  rownames_to_column(., "gene")) %>%
+  bind_rows(., .id= "celltype") %>%
+  #as.data.frame() %>%
+  mutate(cat = "parasitemic: PfRBC vs uRBC") %>%
+subset(celltype %in% c("CD14 Mono", "NK")) %>%
+  subset(abs(avg_log2FC) > 1 & p_val_adj < 0.05) %>%
+  dplyr::select(c(gene, celltype, cat))
+
+
+final_dge <- rbind(irbc_ap_v_p, urbc_ap_v_p, apara_ivu, para_ivu) %>%
+  mutate(present = TRUE) %>% 
+  pivot_wider(
+    names_from = cat, 
+    values_from = present) %>%
+  mutate("aparasitemic: PfRBC vs uRBC" = FALSE) %>%
+  mutate(across(everything(), ~ replace_na(.x, FALSE)))
+
+comparisons <- c("PfRBC: aparasitemic vs parasitemic", 
+                     "uRBC: aparasitemic vs parasitemic", 
+                     "aparasitemic: PfRBC vs uRBC", 
+                     "parasitemic: PfRBC vs uRBC")
+
+# since facetting doesnt work for upset plots, split this wisde DF into NK cells and monocytes, maek sure all comparsions are represented
+
+
+# Plot monocytes
+figs10a_mono <- final_dge %>%
+  subset(celltype == "CD14 Mono") %>%
+  ComplexUpset::upset(., 
+  comparisons,
+  wrap = TRUE, 
+  set_sizes = upset_set_size()) +
+  theme_bw() +
+labs(title = "CD14 Monocytes")
+
+figs10a_nk <- final_dge %>%
+  subset(celltype == "NK") %>%
+  ComplexUpset::upset(., 
+  comparisons,
+  wrap = TRUE, 
+  set_sizes = upset_set_size()) +
+  theme_bw() +
+labs(title = "NK")
+
+```
+
+
+```{r plot ndegs, include=TRUE, fig.align='center', fig.height=5.5, fig.width=13.5}
+
+figures10a <- plot_grid(grid.grabExpr(print(figs10a_mono)), 
+                        grid.grabExpr(print(figs10a_nk)),
+                        nrow = 1)
+
+figures10a 
+```
+
+# B: Plot volcanos, first for iRBC vs uRBC
+
+```{r volcano plots irbc v urbc, fig.align='center', fig.width=4, fig.height=4}
+lfc_threshold <- 1
+signif_threshold <- 0.05
+
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("10XwVnlcyFjBd8BXgmLFJXajv_kDAa-Mf"), path = temp, overwrite = TRUE)
+apara_ivu <- readRDS(file = dl$local_path)
+
+
+apara_ivu <- imap(readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/aparasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_aparasitemic_notdownsampled_54.5k_apara_invitro.rds"), ~.x %>%
+                   rownames_to_column(., "gene")) %>%
+  bind_rows(., .id= "celltype") %>%
+  #as.data.frame() %>%
+  mutate(cat = "aparasitemic: PfRBC vs uRBC") %>%
+subset(celltype %in% c("CD14 Mono", "NK")) 
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1lFrpG1l9PAJS8Q6AzMSOSFFYvSC3HqqQ"), path = temp, overwrite = TRUE)
+para_ivu <- readRDS(file = dl$local_path)
+
+para_ivu <- imap(readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/parasitemic iRBC v uRBC/mast_deglists_filtmatrices_irbc_v_urbc_parasitemic_notdownsampled_54.5k_apara_invitro.rds"), ~.x %>%
+                  rownames_to_column(., "gene")) %>%
+  bind_rows(., .id= "celltype") %>%
+  #as.data.frame() %>%
+  mutate(cat = "parasitemic: PfRBC vs uRBC") %>%
+subset(celltype %in% c("CD14 Mono", "NK")) 
+
+
+irbc_v_urbc_dge <- rbind(apara_ivu, para_ivu)
+
+invitro_mono_volcano_ivu <- irbc_v_urbc_dge  %>%
+  subset(cat %in% c("aparasitemic: PfRBC vs uRBC", "parasitemic: PfRBC vs uRBC")) %>%
+  mutate(cat = ifelse(cat=="aparasitemic: PfRBC vs uRBC", "aparasitemic:\nPfRBC vs uRBC", "parasitemic:\nPfRBC vs uRBC")) %>%
+  mutate(lfc_neglogpvaladj = abs(avg_log2FC)*-log(p_val_adj)) %>%
+  mutate(dot_color = ifelse(avg_log2FC > 0, "up in PfRBC", "up in uRBC")) %>%
+  mutate(dot_color = ifelse(abs(avg_log2FC) < lfc_threshold | p_val_adj >= signif_threshold, "ns", dot_color)) %>%
+  mutate(dot_color = factor(dot_color, levels = c("up in PfRBC", "up in uRBC", "ns"))) %>%
+  mutate(label = ifelse((p_val_adj < signif_threshold & abs(avg_log2FC) > lfc_threshold) | lfc_neglogpvaladj %in% tail(sort(.$lfc_neglogpvaladj), 2) , gene, "")) %>%
+  ggplot(., aes(x = avg_log2FC, y = -log10(p_val_adj))) +
+  geom_point(aes(color = dot_color), size = 1, alpha = 0.6) +
+  geom_hline(yintercept = -log10(signif_threshold), color = "gray20", linetype = "dotted") +
+  geom_vline(xintercept = c(-1,1), color = "gray20", linetype = "dotted") +
+  ylab(bquote(~-log[10] ~ "Adj P value")) +
+  xlab(bquote(~log[2] ~ "fold change")) +
+  ggrepel::geom_text_repel(aes(label = label), max.overlaps = 30, size=2, force = 1, force_pull = 5) +
+  #scale_x_continuous(limits = c(-6,6), breaks = c(-6, -4, -2, 0, 2, 4, 6)) +
+  scale_color_manual(values = c("up in PfRBC" = "orchid4", "up in uRBC"= "orchid", "ns" = "gray")) +
+  theme_bw() +
+  theme(plot.title = element_text(margin=margin(t=17.5,b=-25), hjust = 0.05, vjust = -40),
+        axis.title = element_text(size = 8),
+        strip.text = element_text(size = 8),
+        legend.position = "top",
+        legend.title = element_blank(),
+        plot.margin=unit(c(0.05,0.05,0.05,0.05), "null")) +
+  ggh4x::facet_grid2(cols = vars(cat), rows = vars(celltype))
+
+
+invitro_mono_volcano_ivu -> figs10b
+
+invitro_mono_volcano_ivu
+```
+
+# C: Plot volcanos, apara and para for uRBC to get culture effect
+
+```{r volcano plots apara v para, fig.align='center', fig.width=3, fig.height=4}
+lfc_threshold <- 1
+signif_threshold <- 0.05
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1nBCiKvnExUauJqpqS-A1LU8PXM45eVIo"), path = temp, overwrite = TRUE)
+urbc_ap_v_p <- readRDS(file = dl$local_path)
+
+
+urbc_ap_v_p <- imap(readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/uRBC aparasitemic v parasitemic/mast_deglists_filtmatrices_apara_v_para_urbc_notdownsampled_54.5k_invitro.rds"), ~.x %>%
+                      rownames_to_column(., "gene")) %>%
+  bind_rows(., .id= "celltype") %>%
+  #as.data.frame() %>%
+  mutate(cat = "uRBC: aparasitemic vs parasitemic") %>%
+  subset(celltype %in% c("CD14 Mono", "NK")) 
+
+
+
+invitro_mono_volcano_ap_v_p <- urbc_ap_v_p  %>%
+  subset(cat %in% c("uRBC: aparasitemic vs parasitemic")) %>%
+  mutate(cat = ifelse(cat=="uRBC: aparasitemic vs parasitemic", "uRBC:\naparasitemic vs parasitemic", cat)) %>%
+  mutate(lfc_neglogpvaladj = abs(avg_log2FC)*-log(p_val_adj)) %>%
+  mutate(dot_color = ifelse(avg_log2FC > 0, "up in aparasitemic", "up in parasitemic")) %>%
+  mutate(dot_color = ifelse(abs(avg_log2FC) < lfc_threshold | p_val_adj >= signif_threshold, "ns", dot_color)) %>%
+  mutate(dot_color = factor(dot_color, levels = c("up in aparasitemic", "up in parasitemic", "ns"))) %>%
+  mutate(label = ifelse((p_val_adj < signif_threshold & abs(avg_log2FC) > lfc_threshold) | lfc_neglogpvaladj %in% tail(sort(.$lfc_neglogpvaladj), 2) , gene, "")) %>%
+  ggplot(., aes(x = avg_log2FC, y = -log10(p_val_adj))) +
+  geom_point(aes(color = dot_color), size = 1, alpha = 0.6) +
+  geom_hline(yintercept = -log10(signif_threshold), color = "gray20", linetype = "dotted") +
+  geom_vline(xintercept = c(-1,1), color = "gray20", linetype = "dotted") +
+  ylab(bquote(~-log[10] ~ "adj P value")) +
+  xlab(bquote(~log[2] ~ "fold change")) +
+  ggrepel::geom_text_repel(aes(label = label), max.overlaps = 20, size=2, force = 5, force_pull = 1) +
+  #scale_x_continuous(limits = c(-6,6), breaks = c(-6, -4, -2, 0, 2, 4, 6)) +
+  scale_color_manual(values = c("up in aparasitemic" = "#58a4cb", "up in parasitemic"= "#e41a1c", "ns" = "gray")) +
+  theme_bw() +
+  theme(plot.title = element_text(margin=margin(t=17.5,b=-25), hjust = 0.05, vjust = -40),
+        axis.title = element_text(size = 8),
+        strip.text = element_text(size = 8),
+        legend.position = "top",
+        legend.title = element_blank(),
+        plot.margin=unit(c(0.05,0.05,0.05,0.05), "null")) +
+  ggh4x::facet_grid2(rows = vars(celltype)) +
+  guides(colour = guide_legend(nrow = 3,
+                                 override.aes = list(size=1.5)))
+
+
+invitro_mono_volcano_ap_v_p -> figs10c
+
+invitro_mono_volcano_ap_v_p
+```
+
+# Figure S10d: Characterizing monocytes along pseudotime trajecetory
+
+```{r psueodtime data, fig.align='center', fig.width=7.5, fig.height=4}
+
+temp<- tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1AMD19Nl_7Y-maIGD2DWTmzhQ_b475Pqn"), path = temp, overwrite = TRUE)
+my_hm_mono <- readRDS(file = dl$local_path)
+
+
+# import serialized hm as S4 object and unserialize it
+#my_hm_mono <- readRDS("figure6d_mono_pseudotime_trajecotry_heatmap.rds")
+
+my_hm_mono <- unserialize(my_hm_mono)
+
+final_heatmap_stim <- draw(my_hm_mono, heatmap_legend_side="bottom", annotation_legend_side="right",
+           legend_grouping = "original",
+     annotation_legend_list = lgd_list)
+
+order_cols <- column_order(final_heatmap_stim)
+cluster_anno_ordered <- cluster_anno[order_cols,]
+cluster_anno_ordered <- cluster_anno_ordered %>%
+  mutate("pseudotime cat" = factor(gtools::quantcut(pseudotime, q = 3), labels = c("early", "mid", "late"))) %>%
+  dplyr::select("pseudotime cat", everything()) %>%
+  mutate(class_treatment = factor(paste0(class, "_",treatment), levels = c("parasitemic_uRBC",
+                                                                           "parasitemic_PfRBC",
+                                                                           "aparasitemic_uRBC",
+                                                                           "aparasitemic_PfRBC")))
+mytab_class_treat <- table(cluster_anno_ordered$class_treatment, cluster_anno_ordered$`pseudotime cat`)
+mytab_class_treat
+chi_res <- chisq.test(mytab_class_treat)
+
+ha_ordered <- HeatmapAnnotation(df = cluster_anno, col = clab, na_col = "lavender",
+                        simple_anno_size = unit(0.4, "cm"),
+                        annotation_legend_param = list(annotation_name_side = "left", nrow = 1),
+                        annotation_name_gp= gpar(fontsize = 10),
+                        show_legend = c(FALSE, FALSE, FALSE, FALSE))
+
+ha2 <- HeatmapAnnotation(df = cluster_anno, col = clab, na_col = "lavender",
+                        simple_anno_size = unit(0.4, "cm"),
+                        annotation_legend_param = list(annotation_name_side = "left", nrow = 1),
+                        annotation_name_gp= gpar(fontsize = 12),
+                        show_legend = c(FALSE, FALSE, FALSE, FALSE))
+my_ha_only <- Heatmap(matrix(nrow = 0, ncol = ncol(mat)),
+                      top_annotation = ha2,
+                      show_column_names = FALSE,
+                      clustering_method_columns = NULL,
+                      column_order = order(as.numeric(metadata_reduced$log_pseudo_traj)), #add this to order by pseudotime
+                      cluster_columns = FALSE,
+                      heatmap_legend_param = list(
+                        title = "z-score",
+                        legend_direction = "horizontal",
+                        title_position = "lefttop",
+                        legend_width = unit(3, "cm")))
+
+final_ha_only_ordered <- draw(my_ha_only,
+                              heatmap_legend_side="bottom",
+                              annotation_legend_side="bottom",
+                              legend_grouping = "original",
+                              annotation_legend_list = lgd_list)
+
+library(gridExtra)
+library(gtable)
+mytab_grob <- tableGrob(mytab_class_treat, theme = ttheme_default())
+footnote <- paste0("χ-squared=", signif(chi_res$statistic, 2), ", p=", signif(chi_res$p.value, 2))
+mytab_grob_footnote <- grid.arrange(bottom=footnote, mytab_grob, padding = unit(10, "line"))
+my_table <- tern::decorate_grob(mytab_grob, titles = " ", footnotes = footnote, border = FALSE,
+                                padding = grid::unit(rep(1, 4), "lines"),
+                                margins = grid::unit(c(6,4,4,4), "lines"),
+                                outer_margins = grid::unit(c(-1, 17, 1, 21), "cm"),
+                                gp_footnotes = grid::gpar(fontsize = 12))
+
+figs10d <- plot_grid(grid.grabExpr(draw(final_ha_only_ordered)), my_table, nrow = 2, align = "hv", axis = "tblr")
+
+figs10d
+
+```
+
+Figure S10e
+
+```{r in vitro cytokine data plot, fig.height=5.5, fig.align='center', fig.width=5.5}
+
+#Import cytokine data
+
+temp<-tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1fZahIHtxgwS05KOYyUBXieDJZ4Ht0kwg"), path = temp, overwrite = TRUE)
+invitro_ck.dat <-read_excel(file = dl$local_path)
+
+invitro_ck.dat <-read_excel("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/Cytokine Data/R21 invitro cytokine 15plex from eve 2025.xlsx")
+
+invitro_ck.dat<- invitro_ck.dat %>%
+  dplyr::rename('sample'= '...1') %>%
+  dplyr::select(-c("...17", "...18")) %>%
+separate_rows(sample, sep = " ") %>% 
+  subset(!grepl("PBMCs|sup|lysate|st|18h", sample)) %>%
+  mutate(sample= gsub("[()]", "",sample)) %>%
+  mutate(subj_id= str_extract(sample, "kali\\d+")) %>%
+  mutate(sample= gsub("kali\\d+", "",sample))%>%
+dplyr::rename('stim'= 'sample') %>%
+  mutate(stim= ifelse(stim=="\r\nURBC", "uRBC", "iRBC")) %>%
+  pivot_longer(cols = -c("stim", "subj_id"), values_to = "conc pg/mL", names_to = "analyte") %>%
+  mutate("conc pg/mL"=as.numeric(`conc pg/mL`)) %>%
+  mutate(`log10 pg/mL` = log10(`conc pg/mL`+ 1)) 
+
+# import metadatga
+temp<-tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1hqfxtz_gomTWa9nfzT-3M9dMwbapRl8D"), path = temp, overwrite = TRUE)
+pheno.dat <-readRDS(file = dl$local_path)
+
+# modify and merge with cytokine data
+cytokinedata <- pheno.dat %>%
+  dplyr::select(-"subj_id") %>%
+  dplyr::rename('subj_id' = 'Subject') %>%
+  subset(subj_id %in% invitro_ck.dat$subj_id) %>%
+  left_join(invitro_ck.dat, by="subj_id")
+
+
+# add pairing information
+
+my_comparisons <- list("pair_1" = c("kali0585", "kali0593"), 
+                       "pair_2" = c("kali0613", "kali0612"),
+                       "pair_3" = c("kali0647", "kali0651") 
+                       ) 
+my_comparisons <- bind_rows(my_comparisons, .id = "pairing") 
+my_comparisons <- t(my_comparisons) %>% 
+                      as.data.frame()
+colnames(my_comparisons) <- c("aparasitemic","parasitemic")
+my_comparisons_df <- my_comparisons %>%
+  rownames_to_column(var = "pairing") %>%
+  pivot_longer(cols = c("aparasitemic","parasitemic"), names_to = "class", values_to = "subj_id")
+
+
+cytokinedata <- cytokinedata %>%
+  left_join(my_comparisons_df, by="subj_id") %>%
+  mutate(stim = ifelse(stim== "iRBC", "PfRBC", stim))
+
+# create matrix of values
+cytokinedata$sub_stim <- paste0(cytokinedata$subj_id, "_", cytokinedata$stim)
+
+ck.mat <- cytokinedata %>%
+  dplyr::select(c(`conc pg/mL`, sub_stim, analyte)) %>% 
+  pivot_wider(., names_from = sub_stim, values_from = `conc pg/mL`) %>%
+  #as.data.frame() %>%
+  column_to_rownames("analyte") %>%
+  as.matrix()
+
+# scale and center matrix
+ck.mat <- t(scale(t(ck.mat),  center = TRUE, scale = TRUE))
+
+ck.mat[is.infinite(ck.mat)] <- NA
+# annotations
+ck.annot <- cytokinedata %>%
+  filter(analyte=="IL-4")
+
+cluster_anno <- data.frame(subject = factor(ck.annot$subj_id),
+                           culture = factor(ck.annot$stim),
+                           class = factor(ck.annot$class))
+                           #sub_stim= factor(ck.annot$sub_stim)
+
+
+rownames(cluster_anno) <- colnames(ck.mat)
+
+clab <- list("subject" = c("kali0585" = "#f46d43", "kali0593" = "#1B5E20", "kali0612" = "#fdae61", "kali0613" ="#abdda4",  "kali0647" = "#AD1457", "kali0651" = "#66c2a5"),
+             "class" = c("aparasitemic" = "#58a4cb", "parasitemic"= "#e41a1c"),
+             "culture" = c("uRBC" = "orchid1", "PfRBC"= "orchid3"))
+
+ha <- HeatmapAnnotation(df = cluster_anno, na_col = "darkgrey",
+                        col = clab,
+                        simple_anno_size = unit(0.4, "cm"),
+                        annotation_legend_param = list(annotation_name_side = "left", nrow = 1),
+                        annotation_name_gp= gpar(fontsize = 10),
+                        show_legend = c(FALSE, TRUE, TRUE))
+
+
+
+lgd_list <- list(lgd1 = Legend(labels = c("aparasitemic", "parasitemic"), legend_gp = gpar(fill = c( "#58a4cb", "#e41a1c")), title = "class", type = "grid"),
+                 lgd2 = Legend(labels = c("uRBC", "PfRBC"), legend_gp = gpar(fill = c("orchid1", "orchid3")), title = "treatment", type = "grid"))
+
+col_fun = circlize::colorRamp2(c(-max(abs(ck.mat)), 0, max(abs(ck.mat))), c("blue", "white", "red"))
+
+my_hm_ck <- Heatmap(ck.mat,
+                 top_annotation = ha,
+                 show_column_names = FALSE,
+                 #clustering_method_columns = NULL, #add this to order by pseudotime
+                 cluster_columns = F,
+                 column_split = cluster_anno$class,
+                 row_names_gp = gpar(fontsize = 11),
+                 column_title = "subjects",
+                 column_title_side = "bottom",
+                 row_title = "Z-scored cytokine levels",
+                 row_title_side = "right",
+                 width = ncol(ck.mat)*unit(5, "mm"), 
+    height = nrow(ck.mat)*unit(5, "mm"),
+                 heatmap_legend_param = list(
+                   title = "z-score",
+                   legend_direction = "vertical", 
+                    heatmap_legend_param = list(direction = "vertical"),
+                   #title_position = "lefttop",
+                   legend_width = unit(3, "cm")))
+
+
+
+draw(my_hm_ck, heatmap_legend_side = "right", annotation_legend_side ="bottom")
+
+figs10e <- grid.grabExpr(draw(my_hm_ck, heatmap_legend_side = "right", annotation_legend_side ="bottom"))
+```
+
+# Figure S10g: Cytokine heatmap showing fold changes
+
+```{r invitro ck FCs, fig.align='center', fig.width= 6.5, fig.height=5.5}
+
+temp<-tempfile(fileext = ".rds")
+dl <- drive_download(
+as_id("1fZahIHtxgwS05KOYyUBXieDJZ4Ht0kwg"), path = temp, overwrite = TRUE)
+invitro_ck.dat <-read_excel(file = dl$local_path)
+
+invitro_ck.dat <-read_excel("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/Cytokine Data/R21 invitro cytokine 15plex from eve 2025.xlsx")
+
+invitro_ck.dat_fc<- invitro_ck.dat %>%
+  dplyr::rename('sample'= '...1') %>%
+  dplyr::select(-c("...17", "...18")) %>%
+separate_rows(sample, sep = " ") %>% 
+  subset(!grepl("PBMCs|sup|lysate|st|18h", sample)) %>%
+  mutate(sample= gsub("[()]", "",sample)) %>%
+  mutate(subj_id= str_extract(sample, "kali\\d+")) %>%
+  mutate(sample= gsub("kali\\d+", "",sample))%>%
+dplyr::rename('stim'= 'sample') %>%
+  mutate(stim= ifelse(stim=="\r\nURBC", "uRBC", "iRBC")) %>%
+  pivot_longer(cols = -c("stim", "subj_id"), values_to = "conc pg/mL", names_to = "analyte") %>%
+  mutate("conc pg/mL"=as.numeric(`conc pg/mL`)) %>%
+  group_by(subj_id, analyte) %>%
+  mutate(foldchange_conc = log2(`conc pg/mL`[stim == "iRBC"] / `conc pg/mL`[stim == "uRBC"]))  %>%
+  subset(stim=="iRBC") %>% # prior to removing iRBC, check that the values are correct
+  select(-stim)
+
+
+# modify and merge with cytokine data
+cytokinedata_fc <- pheno.dat %>%
+  dplyr::select(-"subj_id") %>%
+  dplyr::rename('subj_id' = 'Subject') %>%
+  subset(subj_id %in% invitro_ck.dat_fc$subj_id) %>%
+  left_join(invitro_ck.dat_fc, by="subj_id")
+
+
+# add pairing information
+
+my_comparisons <- list("pair_1" = c("kali0585", "kali0593"), 
+                       "pair_2" = c("kali0613", "kali0612"),
+                       "pair_3" = c("kali0647", "kali0651") 
+                       ) 
+my_comparisons <- bind_rows(my_comparisons, .id = "pairing") 
+my_comparisons <- t(my_comparisons) %>% 
+                      as.data.frame()
+colnames(my_comparisons) <- c("aparasitemic","parasitemic")
+my_comparisons_df <- my_comparisons %>%
+  rownames_to_column(var = "pairing") %>%
+  pivot_longer(cols = c("aparasitemic","parasitemic"), names_to = "class", values_to = "subj_id")
+
+
+cytokinedata_fc <- cytokinedata_fc %>%
+  left_join(my_comparisons_df, by="subj_id")
+
+ck.mat_fc <- cytokinedata_fc %>%
+  dplyr::select(c(foldchange_conc, subj_id, analyte)) %>% 
+  pivot_wider(., names_from = subj_id, values_from = foldchange_conc) %>%
+  #as.data.frame() %>%
+  column_to_rownames("analyte") %>%
+  as.matrix()
+
+# scale and center matrix
+#ck.mat <- t(scale(t(ck.mat),  center = TRUE, scale = TRUE))
+#ck.mat[is.nan(ck.mat)] <- NA
+#ck.mat <- ck.mat[-6,]
+
+
+ck.mat_fc[is.infinite(ck.mat_fc)] <- NA
+
+# annotations
+ck.annot <- cytokinedata_fc %>%
+  filter(analyte=="GM-CSF")
+
+clab <- list("subject" = c("kali0585" = "#f46d43", "kali0593" = "#1B5E20", "kali0612" = "#fdae61", "kali0613" ="#abdda4",  "kali0647" = "#AD1457", "kali0651" = "#66c2a5"),
+             "class" = c("aparasitemic" = "#58a4cb", "parasitemic"= "#e41a1c"),
+             "culture" = c("uRBC" = "orchid1", "PfRBC"= "orchid3"))
+
+cluster_anno <- data.frame(subject = factor(ck.annot$subj_id),
+                           #culture = factor(ck.annot$stim),
+                           class = factor(ck.annot$class))
+
+rownames(cluster_anno) <- colnames(ck.mat_fc)
+
+ha <- HeatmapAnnotation(df = cluster_anno, na_col = "darkgrey",
+                        col = clab,
+                        simple_anno_size = unit(0.4, "cm"),
+                        annotation_legend_param = list(annotation_name_side = "left", nrow = 1),
+                        annotation_name_gp= gpar(fontsize = 10),
+                        show_legend = c(FALSE, TRUE))
+
+col_fun = circlize::colorRamp2(c(-max(abs(ck.mat_fc)), 0, max(abs(ck.mat_fc))), c("blue", "white", "red"))
+
+my_hm_ck_fc <- Heatmap(ck.mat_fc,
+                    top_annotation = ha,
+                    show_column_names = FALSE,
+                    #clustering_method_columns = NULL, #add this to order by pseudotime
+                    cluster_columns = F,
+                    column_split = cluster_anno$class,
+                    row_names_gp = gpar(fontsize = 11),
+                    column_title = "subjects",
+                    column_title_side = "bottom",
+                    row_title = "log2 fold change (PfRBC/uRBC)",
+                    width = ncol(ck.mat_fc)*unit(6, "mm"), 
+    height = nrow(ck.mat_fc)*unit(6, "mm"),
+                    row_title_side = "right",
+                    heatmap_legend_param = list(
+                      title = "log2FC",
+                     legend_direction = "vertical", 
+                    heatmap_legend_param = list(direction = "vertical"),
+                      legend_width = unit(3, "cm")))
+
+draw(my_hm_ck_fc, heatmap_legend_side = "right", annotation_legend_side ="bottom")
+
+figs10f <- grid.grabExpr(draw(my_hm_ck_fc, heatmap_legend_side = "right", annotation_legend_side ="bottom"))
+```
+
+
+
+# Put figure parts together
+
+```{r assemble figure, fig.align='center', fig.width= 13.5, fig.height= 12}
+
+Figures10bcd <- plot_grid(figs10b, figs10c, figs10d, 
+                          nrow = 1, labels = c('b', 'c', 'd'), rel_widths = c(4,2.5,7))
+
+Figures10ef <- plot_grid(NULL, 
+                          figs10e,
+                         figs10f,
+                         NULL,
+                         nrow = 1,
+                         labels = c('', 'e', 'f', ''), rel_widths = c(1.25, 5.5,6.5,1.25))
+
+FigureS10 <- plot_grid(figures10a, Figures10bcd, Figures10ef, 
+                          nrow= 3,
+                          rel_heights = c(4,4,5.5))
+
+
+FigureS10
+```
+
+```{r save fig s10}
+ggsave(paste0(figdir, "Figure S10 in vitro GEX changes volcanos pseudotime and CKs.pdf"), FigureS10, units = "in", height = 12, width = 13.5, bg = "white")
+
+ggsave(paste0(figdir, "Figure S10 in vitro GEX changes volcanos pseudotime and CKs.png"), FigureS10, units = "in", height = 12, width = 13.5, bg = "white", dpi = 300)
+```
+
