@@ -92,7 +92,7 @@ Figure6a_gg <- ggplot() + annotation_custom(grid::rasterGrob(fig6apng,
 Figure6a_gg 
 ```
 
-# B. uMAP plot of 59K cells, split by urbc/irbc
+# B. uMAP plot of 54.5K cells, split by urbc/irbc
 
 ```{r umap plots of in vitro data, include=TRUE, message=FALSE, warning=FALSE}
 #Import the reference mapped, subsampled 50K in vitro object
@@ -232,7 +232,9 @@ dl <- drive_download(
 as_id("1EwdusLa7AoT9VgFobt1NAEqzXnit8feK"), path = temp, overwrite = TRUE)
 mast_dge_gsea <- readRDS(file = dl$local_path)
 
-mast_dge_gsea <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/GSEA/mono and NK GSEA from MAST of filtmatrices 54.5k non downsampled obj.rds") %>%
+#mast_dge_gsea <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/MAST_deglists_invitro/GSEA/mono and NK GSEA from MAST of filtmatrices 54.5k non downsampled obj.rds") 
+
+mast_dge_gsea <- mast_dge_gsea %>%
   bind_rows(., .id = "category") %>%
   separate_wider_delim(cols = category, "_", names = c("celltype", "stim"))
 
@@ -470,7 +472,7 @@ dl <- drive_download(
 as_id("191SPVPF3XuTG220_yV9uYgbz45PX4urx"), path = temp, overwrite = TRUE)
 invitro.pf_subset <- readRDS(file = dl$local_path)
 
-invitro.pf_subset <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_pf_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
+#invitro.pf_subset <- readRDS("~/Library/CloudStorage/OneDrive-IndianaUniversity/Desktop/R21 Sterile Immunity data and scripts/All scRNA-seq GEX consolidated (CITE-exvivo and multiome)/In vitro/invitro_pf_seuratobj_with normalized 18s rRNA metagene and Hs metadata.rds")
 
 # subset monocytes
 
